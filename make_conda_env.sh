@@ -26,7 +26,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 source "${DIR}/init_conda.sh"
 set -u  # init conda has some unbounded variables
 
-CONDA_ENV_NAME="woyb"
+CONDA_ENV_NAME="revllm"
 CONDA_PACKAGE_FILES="--file conda_packages.txt"
 
 conda_rm_env ${CONDA_ENV_NAME}
