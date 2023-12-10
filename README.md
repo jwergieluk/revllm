@@ -1,2 +1,3 @@
-# revllm_new
-RevLLM
+# RevLLM
+
+Reverse Engineering Tools for Large Language Models

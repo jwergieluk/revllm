@@ -1,0 +1,20 @@
+line-length = 100
+target-version = "py311"
+
+[lint]
+select = [
+    "A",
+#    "E",
+#    "F",
+#    "B",
+    "I",
+    "N",
+#    "UP"
+    "YTT",
+#    "ANN",
+#    "NPY",
+    "FLY",
+#    "PERF",
+#    "PD",
+#    "TRY",
+]
