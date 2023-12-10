@@ -1,20 +1,65 @@
 import streamlit as st
+import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
 
 SUPPORTED_MODELS = ("", "gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl")
+AVAILABLE_DEVICES = ("cpu", "cuda") if torch.cuda.is_available() else ("cpu",)
 
 PAGE_MODEL_ARCHITECTURE = "Architecture"
-PAGE_MODEL_CHAT = "Chat"
+PAGE_GENERATE = "Generate"
 ALL_PAGES = (
     PAGE_MODEL_ARCHITECTURE,
-    PAGE_MODEL_CHAT,
+    PAGE_GENERATE,
 )
+
+
+def reformat_lines(input_string: str, max_line_len: int):
+    # Split the input string into lines
+    lines = input_string.splitlines()
+
+    # Initialize an empty list to store the reformatted lines
+    reformatted_lines = []
+
+    for line in lines:
+        # Split the line into words
+        words = line.split()
+
+        # Initialize variables to store the current line and its length
+        current_line = []
+        current_line_len = 0
+
+        for word in words:
+            # Check if adding the current word to the current line exceeds the max_line_len
+            if current_line_len + len(word) + len(current_line) > max_line_len:
+                # Add the current line to the reformatted lines list
+                reformatted_lines.append(" ".join(current_line))
+                # Reset the current line and its length
+                current_line = []
+                current_line_len = 0
+
+            # Add the current word to the current line
+            current_line.append(word)
+            current_line_len += len(word)
+
+        # Add the remaining part of the current line to the reformatted lines list
+        reformatted_lines.append(" ".join(current_line))
+
+    # Join the reformatted lines to form the final reformatted string
+    reformatted_string = "\n".join(reformatted_lines)
+
+    return reformatted_string
 
 
 def main():
     st.markdown("# RevLLM")
     st.caption("Reverse Engineering Tools for Language Models")
 
+    selected_device = st.sidebar.selectbox(
+        "Select device",
+        AVAILABLE_DEVICES,
+        index=0,
+    )
+    device = str(selected_device).strip()
     selected_model = st.sidebar.selectbox(
         "Select model",
         SUPPORTED_MODELS,
@@ -36,7 +81,7 @@ def main():
 
     if selected_page == PAGE_MODEL_ARCHITECTURE:
         show_page_model_architecture(config, tokenizer, model)
-    if selected_page == PAGE_MODEL_CHAT:
+    if selected_page == PAGE_GENERATE:
         show_page_generate(config, tokenizer, model)
 
 
@@ -72,15 +117,26 @@ def show_page_model_architecture(config, tokenizer, model):
 
 def show_page_generate(config, tokenizer, model):
     st.markdown("## Generate")
-    input_text = st.text_input("Input text", "Hi.")
+    input_text = st.text_input("Input text", "In both meditation and language modelling, attention")
+    checkbox_skip_special_tokens = st.checkbox("Skip special tokens", value=True)
+    checkbox_reformat_output = st.checkbox("Reformat output", value=True)
+    input_output_len = st.number_input("Output length", min_value=1, max_value=1000, value=100)
     if not str(input_text).strip():
         return
 
+    button_generate = st.button("Generate")
+    if not button_generate:
+        return
+
     encoded_input = tokenizer(str(input_text), return_tensors="pt")
-    output = model.generate(**encoded_input, max_length=60)
-    generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+    with st.spinner("Evaluated model..."):
+        output = model.generate(**encoded_input, max_length=input_output_len)
+    st.write(output.shape)
+    generated_text = tokenizer.decode(output[0], skip_special_tokens=checkbox_skip_special_tokens)
+    if checkbox_reformat_output:
+        generated_text = reformat_lines(generated_text, max_line_len=80)
     st.caption("Generated text")
-    st.code(generated_text)
+    st.code(generated_text, language="text")
 
 
 if __name__ == "__main__":
