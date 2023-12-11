@@ -16,10 +16,6 @@ fi
 ${MAMBA} self-update --yes
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-ENV_NAME="revllm"
-CONDA_PACKAGE_FILES="--file conda_packages.txt"
+ENV_NAME="revllm_dev"
+CONDA_PACKAGE_FILES="--file conda_packages.txt --file conda_packages_dev.txt"
 $MAMBA create -n "${ENV_NAME}" --yes ${CONDA_PACKAGE_FILES}
-
-#. "${MAMBA_ROOT_PREFIX}/etc/profile.d/micromamba.sh"
-#$MAMBA activate "${ENV_NAME}"
-#$MAMBA env list

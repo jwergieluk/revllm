@@ -11,3 +11,4 @@ pytorch>=2.0
 streamlit>=1.28.0
 transformers>=4.33
 tiktoken
+ruff

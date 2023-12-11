@@ -1,6 +1,9 @@
+import os
+
+import psutil
 import streamlit as st
 import torch
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GPT2LMHeadModel
 
 SUPPORTED_MODELS = ("", "gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl")
 AVAILABLE_DEVICES = ("cpu", "cuda") if torch.cuda.is_available() else ("cpu",)
@@ -11,6 +14,13 @@ ALL_PAGES = (
     PAGE_MODEL_ARCHITECTURE,
     PAGE_GENERATE,
 )
+
+
+
+def get_memory_usage():
+    process = psutil.Process(os.getpid())
+    mem_info = process.memory_info()
+    return mem_info.rss / (1024 * 1024)
 
 
 def reformat_lines(input_string: str, max_line_len: int):
@@ -71,13 +81,14 @@ def main():
     with st.spinner("Loading model..."):
         config = AutoConfig.from_pretrained(selected_model)
         tokenizer = AutoTokenizer.from_pretrained(selected_model)
-        model = AutoModelForCausalLM.from_pretrained(selected_model)
+        model = GPT2LMHeadModel.from_pretrained(selected_model)
         model.eval()
     selected_page = st.sidebar.radio(
         "Select page",
         ALL_PAGES,
         index=0,
     )
+    st.sidebar.caption(f'Memory usage: {get_memory_usage():.0f} MB')
 
     if selected_page == PAGE_MODEL_ARCHITECTURE:
         show_page_model_architecture(config, tokenizer, model)
@@ -129,7 +140,7 @@ def show_page_generate(config, tokenizer, model):
         return
 
     encoded_input = tokenizer(str(input_text), return_tensors="pt")
-    with st.spinner("Evaluated model..."):
+    with st.spinner("Evaluating model..."):
         output = model.generate(**encoded_input, max_length=input_output_len)
     st.write(output.shape)
     generated_text = tokenizer.decode(output[0], skip_special_tokens=checkbox_skip_special_tokens)
