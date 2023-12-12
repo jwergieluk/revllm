@@ -5,6 +5,7 @@ import streamlit as st
 import torch
 from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GPT2LMHeadModel
 
+APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
 SUPPORTED_MODELS = ("", "gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl")
 AVAILABLE_DEVICES = ("cpu", "cuda") if torch.cuda.is_available() else ("cpu",)
 
@@ -15,7 +16,7 @@ ALL_PAGES = (
     PAGE_GENERATE,
 )
 
-
+st.set_page_config(page_title=APP_TITLE, page_icon=":rocket:")
 
 def get_memory_usage():
     process = psutil.Process(os.getpid())
@@ -142,7 +143,7 @@ def show_page_generate(config, tokenizer, model):
     encoded_input = tokenizer(str(input_text), return_tensors="pt")
     with st.spinner("Evaluating model..."):
         output = model.generate(**encoded_input, max_length=input_output_len)
-    st.write(output.shape)
+
     generated_text = tokenizer.decode(output[0], skip_special_tokens=checkbox_skip_special_tokens)
     if checkbox_reformat_output:
         generated_text = reformat_lines(generated_text, max_line_len=80)
