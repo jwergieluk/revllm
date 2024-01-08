@@ -4,12 +4,12 @@ target-version = "py311"
 [lint]
 select = [
     "A",
-#    "E",
-#    "F",
-#    "B",
+    "E",
+    "F",
+    "B",
     "I",
     "N",
-#    "UP"
+    "UP",
     "YTT",
 #    "ANN",
 #    "NPY",

@@ -3,7 +3,8 @@ import os
 import psutil
 import streamlit as st
 import torch
-from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer, GPT2LMHeadModel
+
+from revllm.model_wrapper import ModelWrapper
 
 APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
 SUPPORTED_MODELS = ("", "gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl")
@@ -17,6 +18,7 @@ ALL_PAGES = (
 )
 
 st.set_page_config(page_title=APP_TITLE, page_icon=":rocket:")
+
 
 def get_memory_usage():
     process = psutil.Process(os.getpid())
@@ -61,6 +63,15 @@ def reformat_lines(input_string: str, max_line_len: int):
     return reformatted_string
 
 
+@st.cache_resource(show_spinner="Loading model...")
+def get_model_wrapper(
+    model_name: str,
+    device_name: str = "cpu",
+    compiled: bool = False,
+) -> ModelWrapper:
+    return ModelWrapper(model_name=model_name, device_name=device_name, compiled=compiled)
+
+
 def main():
     st.markdown("# RevLLM")
     st.caption("Reverse Engineering Tools for Language Models")
@@ -79,28 +90,24 @@ def main():
     if not str(selected_model).strip():
         return
 
-    with st.spinner("Loading model..."):
-        config = AutoConfig.from_pretrained(selected_model)
-        tokenizer = AutoTokenizer.from_pretrained(selected_model)
-        model = GPT2LMHeadModel.from_pretrained(selected_model)
-        model.eval()
+    model_wrapper = get_model_wrapper(selected_model, device_name=device)
     selected_page = st.sidebar.radio(
         "Select page",
         ALL_PAGES,
         index=0,
     )
-    st.sidebar.caption(f'Memory usage: {get_memory_usage():.0f} MB')
+    st.sidebar.caption(f"Memory usage: {get_memory_usage():.0f} MB")
 
     if selected_page == PAGE_MODEL_ARCHITECTURE:
-        show_page_model_architecture(config, tokenizer, model)
+        show_page_model_architecture(model_wrapper)
     if selected_page == PAGE_GENERATE:
-        show_page_generate(config, tokenizer, model)
+        show_page_generate(model_wrapper)
 
 
-def show_page_model_architecture(config, tokenizer, model):
+def show_page_model_architecture(wrapper: ModelWrapper):
     st.markdown("### Model Card")
 
-    num_model_params = sum(p.nelement() for p in model.parameters())
+    num_model_params = sum(p.nelement() for p in wrapper.model.parameters())
     units = {
         "K": 1000,
         "M": 1000_000,
@@ -111,25 +118,25 @@ def show_page_model_architecture(config, tokenizer, model):
         if num_model_params > divider:
             num_model_params_in_unit = f"{num_model_params / divider:.0f}{unit}"
 
-    num_transformer_blocks = len(model.transformer.h)
+    num_transformer_blocks = len(wrapper.model.transformer.h)
 
     col0, col1 = st.columns(2)
     col0.metric("Model parameters", num_model_params_in_unit)
     col1.metric("Transformer Blocks", num_transformer_blocks)
 
     st.caption("Model Architecture")
-    st.code(model)
+    st.code(str(wrapper))
 
-    st.caption("Model config")
-    st.code(config)
+    # st.caption("Model config")
+    # st.code(config)
+    #
+    # st.caption("Model tokenizer")
+    # st.code(tokenizer)
 
-    st.caption("Model tokenizer")
-    st.code(tokenizer)
 
-
-def show_page_generate(config, tokenizer, model):
+def show_page_generate(wrapper: ModelWrapper):
     st.markdown("## Generate")
-    input_text = st.text_input("Input text", "In both meditation and language modelling, attention")
+    input_text = st.text_input("Input text", "Hello, my name is")
     checkbox_skip_special_tokens = st.checkbox("Skip special tokens", value=True)
     checkbox_reformat_output = st.checkbox("Reformat output", value=True)
     input_output_len = st.number_input("Output length", min_value=1, max_value=1000, value=100)
@@ -140,11 +147,10 @@ def show_page_generate(config, tokenizer, model):
     if not button_generate:
         return
 
-    encoded_input = tokenizer(str(input_text), return_tensors="pt")
     with st.spinner("Evaluating model..."):
-        output = model.generate(**encoded_input, max_length=input_output_len)
+        generated_text = wrapper.generate(input_text)
 
-    generated_text = tokenizer.decode(output[0], skip_special_tokens=checkbox_skip_special_tokens)
+    # generated_text = tokenizer.decode(output[0], skip_special_tokens=checkbox_skip_special_tokens)
     if checkbox_reformat_output:
         generated_text = reformat_lines(generated_text, max_line_len=80)
     st.caption("Generated text")

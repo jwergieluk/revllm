@@ -59,7 +59,7 @@ def select_index(tokens_list: list[str], token: str = None) -> int:
 
         while True:
             print(f"The token you chose occurs more than once, at indices: {indices}")
-            chosen_index = int(input(f"Please one of these indices: "))
+            chosen_index = int(input("Please one of these indices: "))
             if chosen_index in indices:
                 return chosen_index
             else:

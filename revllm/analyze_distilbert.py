@@ -114,15 +114,15 @@ class AnalyzeSentiment:
         df = pd.DataFrame(
             {
                 "Word(Index), Attribution": [
-                    "{} ({}), {}".format(word, pos, round(val.item(), 2))
-                    for word, pos, val in zip(top_words, top_word_ind, top_words_val)
+                    f"{word} ({pos}), {round(val.item(), 2)}"
+                    for word, pos, val in zip(top_words, top_word_ind, top_words_val, strict=False)
                 ]
             }
         )
         df.style.set_properties(cell_ids=False)
 
         full_token_list = [
-            "{}({})".format(token, str(i)) for i, token in enumerate(self.preprocessor.all_tokens)
+            f"{token}({str(i)})" for i, token in enumerate(self.preprocessor.all_tokens)
         ]
 
         print(f"Full token list: {full_token_list}")
@@ -249,9 +249,9 @@ class AnalyzeQAndA:
         df_start = pd.DataFrame(
             {
                 "Word(Index), Attribution": [
-                    "{} ({}), {}".format(word, pos, round(val.item(), 2))
+                    f"{word} ({pos}), {round(val.item(), 2)}"
                     for word, pos, val in zip(
-                        top_words_start, top_word_ind_start, top_words_val_start
+                        top_words_start, top_word_ind_start, top_words_val_start, strict=False
                     )
                 ]
             }
@@ -261,15 +261,15 @@ class AnalyzeQAndA:
         df_end = pd.DataFrame(
             {
                 "Word(Index), Attribution": [
-                    "{} ({}), {}".format(word, pos, round(val.item(), 2))
-                    for word, pos, val in zip(top_words_end, top_words_ind_end, top_words_val_end)
+                    f"{word} ({pos}), {round(val.item(), 2)}"
+                    for word, pos, val in zip(top_words_end, top_words_ind_end, top_words_val_end, strict=False)
                 ]
             }
         )
         df_end.style.set_properties(cell_ids=False)
 
         full_token_list = [
-            "{}({})".format(token, str(i)) for i, token in enumerate(self.preprocessor.all_tokens)
+            f"{token}({str(i)})" for i, token in enumerate(self.preprocessor.all_tokens)
         ]
 
         print(f"Full token list: {full_token_list}")
@@ -364,15 +364,15 @@ class AnalyzeMaskedLM:
         df = pd.DataFrame(
             {
                 "Word(Index), Attribution": [
-                    "{} ({}), {}".format(word, pos, round(val.item(), 2))
-                    for word, pos, val in zip(top_words, top_word_ind, top_words_val)
+                    f"{word} ({pos}), {round(val.item(), 2)}"
+                    for word, pos, val in zip(top_words, top_word_ind, top_words_val, strict=False)
                 ]
             }
         )
         df.style.set_properties(cell_ids=False)
 
         full_token_list = [
-            "{}({})".format(token, str(i)) for i, token in enumerate(self.preprocessor.all_tokens)
+            f"{token}({str(i)})" for i, token in enumerate(self.preprocessor.all_tokens)
         ]
 
         print(f"Full token list: {full_token_list}")
