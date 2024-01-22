@@ -17,9 +17,5 @@ ${MAMBA} self-update --yes
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 ENV_NAME="revllm"
-CONDA_PACKAGE_FILES="--file conda_packages.txt"
-$MAMBA create -n "${ENV_NAME}" --yes ${CONDA_PACKAGE_FILES}
-
-#. "${MAMBA_ROOT_PREFIX}/etc/profile.d/micromamba.sh"
-#$MAMBA activate "${ENV_NAME}"
-#$MAMBA env list
+$MAMBA create -n "${ENV_NAME}" -c conda-forge --channel-priority strict --file conda_packages.txt --yes
+$MAMBA run -n ${ENV_NAME} pip install --upgrade -r pip_packages.txt
