@@ -6,8 +6,9 @@ import psutil
 import scipy.stats
 import streamlit as st
 import torch
+from streamlit_extras.word_importances import format_word_importances
 
-from demo_tokenizers import show_page_tokenizer
+from demo_tokenizers import display_words_as_dataframe, show_page_tokenizer
 from revllm.model_wrapper import ModelWrapper
 
 APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
@@ -17,15 +18,26 @@ AVAILABLE_DEVICES = ("cpu", "cuda") if torch.cuda.is_available() else ("cpu",)
 PAGE_MODEL_ARCHITECTURE = "Architecture"
 PAGE_TOKENIZER = "Tokenizer"
 PAGE_TOKEN_EMBEDDINGS = "Token Embeddings"
+PAGE_PROMPT_IMPORTANCE = "Prompt Importance"
+PAGE_CIRCUIT_DISCOVERY = "Circuit Discovery"
 PAGE_GENERATE = "Generate"
 ALL_PAGES = (
     PAGE_MODEL_ARCHITECTURE,
     PAGE_TOKENIZER,
     PAGE_TOKEN_EMBEDDINGS,
     PAGE_GENERATE,
+    PAGE_PROMPT_IMPORTANCE,
+    PAGE_CIRCUIT_DISCOVERY,
 )
 
-st.set_page_config(page_title=APP_TITLE, page_icon=":rocket:")
+IMPORTANCE_INTEGRATED_GRADIENTS = "Integrated Gradients"
+IMPORTANCE_LIME = "LIME"
+ALL_IMPORTANCE_METHODS = (
+    IMPORTANCE_INTEGRATED_GRADIENTS,
+    IMPORTANCE_LIME,
+)
+
+st.set_page_config(page_title=APP_TITLE, page_icon=":microscope:")
 
 
 def get_memory_usage():
@@ -112,6 +124,8 @@ def main():
         show_page_tokenizer("gpt2")
     if selected_page == PAGE_TOKEN_EMBEDDINGS:
         show_page_token_embeddings(model_wrapper)
+    if selected_page == PAGE_PROMPT_IMPORTANCE:
+        show_page_prompt_importance(model_wrapper)
     if selected_page == PAGE_GENERATE:
         show_page_generate(model_wrapper)
 
@@ -188,13 +202,15 @@ def show_page_token_embeddings(wrapper: ModelWrapper):
     st.dataframe(weight_stats_df, use_container_width=False)
 
     st.subheader("Embedding dimension statistics")
-    dim_stats_df = get_dim_stats_df(wrapper.model_name, weights)
-    st.caption("Embedding dimension mean.")
-    st.line_chart(dim_stats_df["Mean"], use_container_width=True, color="#246e69")
-    st.caption("Embedding dimension standard deviation.")
-    st.line_chart(dim_stats_df["Std"], use_container_width=True, color="#15799e")
-    st.caption("Embedding dimension kurtosis.")
-    st.line_chart(dim_stats_df["Kurtosis"], use_container_width=True, color="#e6a400")
+    checkbox_show_dim_stats = st.checkbox("Show embedding dimension statistics", value=False)
+    if checkbox_show_dim_stats:
+        dim_stats_df = get_dim_stats_df(wrapper.model_name, weights)
+        st.caption("Embedding dimension mean.")
+        st.line_chart(dim_stats_df["Mean"], use_container_width=True, color="#246e69")
+        st.caption("Embedding dimension standard deviation.")
+        st.line_chart(dim_stats_df["Std"], use_container_width=True, color="#15799e")
+        st.caption("Embedding dimension kurtosis.")
+        st.line_chart(dim_stats_df["Kurtosis"], use_container_width=True, color="#e6a400")
 
     st.subheader("Embedding matrix entries")
     weights_standardized_01 = get_standardized_weights(wrapper.model_name, weights)
@@ -232,18 +248,21 @@ def show_page_token_embeddings(wrapper: ModelWrapper):
                 use_column_width=True,
             )
 
-        tokens = wrapper.tokenizer.decode_tokens_separately(list(range(first_row, last_row)))
-        st.caption("Tokens")
-        st.code("\n".join(tokens), language="text")
+        if num_rows < 1001:
+            tokens = wrapper.tokenizer.decode_tokens_separately(list(range(first_row, last_row)))
+            st.caption("Tokens")
+            display_words_as_dataframe(tokens, num_columns=10, hide_index=False)
+        else:
+            st.caption("Too many tokens to display.")
 
 
 def show_page_generate(wrapper: ModelWrapper):
     st.markdown("## Generate")
-    input_text = st.text_input("Input text", "Hello, my name is")
-    checkbox_skip_special_tokens = st.checkbox("Skip special tokens", value=True)
+    prompt = st.text_input("Input text", "Hello, my name is")
     checkbox_reformat_output = st.checkbox("Reformat output", value=True)
-    input_output_len = st.number_input("Output length", min_value=1, max_value=1000, value=100)
-    if not str(input_text).strip():
+    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=250)
+    temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
+    if not str(prompt).strip():
         return
 
     button_generate = st.button("Generate")
@@ -251,13 +270,59 @@ def show_page_generate(wrapper: ModelWrapper):
         return
 
     with st.spinner("Evaluating model..."):
-        generated_text = wrapper.generate(input_text)
+        generated_text = wrapper.generate(prompt, max_new_tokens, temperature)
 
     # generated_text = tokenizer.decode(output[0], skip_special_tokens=checkbox_skip_special_tokens)
     if checkbox_reformat_output:
         generated_text = reformat_lines(generated_text, max_line_len=80)
     st.caption("Generated text")
     st.code(generated_text, language="text")
+
+
+def show_page_prompt_importance(wrapper: ModelWrapper):
+    st.header("Prompt Importance Analysis")
+
+    selected_importance_method = st.selectbox(
+        "Select importance method",
+        ALL_IMPORTANCE_METHODS,
+        index=0,
+    )
+    prompt = st.text_input("prompt", "Hello, my name is")
+    prompt = str(prompt).strip()
+    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=100, value=10)
+    checkbox_show_scores = st.checkbox("Show details", value=True)
+    if not str(prompt).strip():
+        return
+    button_generate = st.button("Generate")
+    if not button_generate:
+        return
+
+    scores_generator = None
+    if selected_importance_method == IMPORTANCE_INTEGRATED_GRADIENTS:
+        scores_generator = wrapper.yield_importance_integrated_gradients(prompt)
+    if selected_importance_method == IMPORTANCE_LIME:
+        scores_generator = wrapper.yield_importance_lime(prompt)
+    if not scores_generator:
+        return
+
+    scores = []
+    for i in range(max_new_tokens):
+        score = next(scores_generator)
+        scores.append(score)
+        st.subheader(
+            f"Generated Token {i + 1}: '{score.output_token}' (id: {score.output_token_id})"
+        )
+
+        st.caption("Input tokens with scores")
+        html = format_word_importances(
+            words=score.input_tokens,
+            importances=score.input_token_scores,
+        )
+        st.write(html, unsafe_allow_html=True)
+
+        if checkbox_show_scores:
+            st.caption("Full importance score data")
+            st.dataframe(score.get_input_score_df())
 
 
 if __name__ == "__main__":

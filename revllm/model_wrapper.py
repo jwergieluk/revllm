@@ -1,10 +1,10 @@
-import json
 from collections.abc import Generator
 from contextlib import nullcontext
 
 import pandas as pd
 import tiktoken
 import torch
+from tiktoken import Encoding
 
 from revllm.gpt import GPT
 
@@ -13,10 +13,10 @@ class TokenizerWrapper:
     def __init__(self, device_type: str = "cpu"):
         self.device = device_type
         self.dtype = torch.long
-        self.tokenizer = tiktoken.get_encoding("gpt2")
+        self.tokenizer: Encoding = tiktoken.get_encoding("gpt2")
 
     def get_vocab_size(self) -> int:
-        return 0
+        return self.tokenizer.max_token_value + 1
 
     def encode(self, text: str) -> torch.Tensor:
         x = self.tokenizer.encode(text, allowed_special={"<|endoftext|>"})
@@ -25,30 +25,24 @@ class TokenizerWrapper:
         return x
 
     def decode(self, tokens: list[int]) -> str:
-        return json.dumps(self.tokenizer.decode(tokens))
+        return self.tokenizer.decode(tokens)
 
     def decode_single_token(self, token: int) -> str:
-        return json.dumps(
-            self.tokenizer.decode_single_token_bytes(token).decode("utf-8", errors="ignore")
-        )
+        return ascii(self.tokenizer.decode_single_token_bytes(token))[2:-1]
 
     def decode_tokens_separately(self, tokens: list[int]) -> list[str]:
-        text, offsets = self.tokenizer.decode_with_offsets(tokens)
-        tokens = [
-            text[start:end] for start, end in zip(offsets[:-1], offsets[1:], strict=False)
-        ] + [
-            text[offsets[-1] :],
-        ]
-        return [json.dumps(token) for token in tokens]
+        byte_tokens = self.tokenizer.decode_tokens_bytes(tokens)
+        tokens = [ascii(token)[2:-1] for token in byte_tokens]
+        return tokens
 
 
 class PromptImportance:
     def __init__(
         self,
         prompt: str,
-        input_token_ids: list[int],
+        input_token_ids: list[int] | torch.Tensor,
         input_tokens: list[str],
-        input_token_scores: list[float],
+        input_token_scores: list[float] | torch.Tensor,
         output_token_id: int,
         output_token: str,
     ):
@@ -137,11 +131,17 @@ class ModelWrapper:
                 y = self.model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
                 return self.tokenizer.decode(y[0].tolist())
 
+    def yield_importance_shap(self, prompt: str) -> Generator[PromptImportance, None, None]:
+        pass
+
+    def yield_importance_lime(self, prompt: str) -> Generator[PromptImportance, None, None]:
+        pass
+
     def yield_importance_integrated_gradients(
-        self, prompt: str, max_new_tokens: int = 10, n_steps: int = 50
+        self, prompt: str, n_steps: int = 50
     ) -> Generator[PromptImportance, None, None]:
         input_token_ids = self.tokenizer.encode(prompt)
-        for _ in range(max_new_tokens):
+        while True:
             input_tokens = self.tokenizer.decode_tokens_separately(
                 input_token_ids[0].detach().tolist()
             )  # [1, 7]
@@ -228,9 +228,3 @@ class ModelWrapper:
                 ],
                 dim=1,
             )
-
-
-if __name__ == "__main__":
-    model = ModelWrapper("gpt2")
-    print(model)
-    print(model.generate("Hello, my name is"))

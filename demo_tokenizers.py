@@ -5,7 +5,9 @@ import tiktoken
 from tiktoken import Encoding
 
 
-def display_words_as_dataframe(words: list[str], num_columns: int = 7) -> None:
+def display_words_as_dataframe(
+    words: list[str], num_columns: int = 7, hide_index: bool = True
+) -> None:
     """Displays a list of words as a dataframe with a given number of columns."""
     num_words = len(words)
     num_rows = (num_words + num_columns - 1) // num_columns
@@ -13,7 +15,7 @@ def display_words_as_dataframe(words: list[str], num_columns: int = 7) -> None:
     words = words + [""] * (num_rows * num_columns - num_words)
     words = [words[i : i + num_columns] for i in range(0, len(words), num_columns)]
     words_df = pd.DataFrame(words)
-    st.dataframe(words_df, hide_index=True, use_container_width=True)
+    st.dataframe(words_df, hide_index=hide_index)
 
 
 def split_into_words_and_show(tokenizer: Encoding, text: str) -> None:
@@ -34,28 +36,18 @@ def show_tokens_word_by_word(tokenizer: Encoding, text: str) -> None:
 
     max_num_tokens = max(len(tokens) for _, tokens in word_tokens_pairs)
     columns = ["Word", "Len", *[f"Token {i+1}" for i in range(max_num_tokens)]]
-    dtype = ["string", "int", *["int" for i in range(max_num_tokens)]]
-    word_tokens_df = pd.DataFrame(
-        [
-            (
-                f'"{word}"',
-                len(word),
-                *tokens,
-                *(
-                    [
-                        None,
-                    ]
-                    * (max_num_tokens - len(tokens))
-                ),
-            )
-            for word, tokens in word_tokens_pairs
-        ],
-        columns=columns,
-    )
-    # for col, col_dtype in zip(columns[2:], dtype[2:]):
-    #     word_tokens_df[col] = word_tokens_df[col].astype(col_dtype)
+    data = [
+        (
+            f'"{word}"',
+            len(tokens),
+            *tokens,
+        )
+        for word, tokens in word_tokens_pairs
+    ]
+    data = [[*row, *([None] * (max_num_tokens - len(row)))] for row in data]
+    word_tokens_df = pd.DataFrame(data, columns=columns)
     st.write("The words are tokenized as follows:")
-    st.dataframe(word_tokens_df, use_container_width=True)
+    st.dataframe(word_tokens_df)
 
 
 def show_page_tokenizer(tokenizer_name: str):
