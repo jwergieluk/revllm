@@ -283,13 +283,15 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
     st.header("Prompt Importance Analysis")
 
     selected_importance_method = st.selectbox(
-        "Select importance method",
+        "Select token importance scoring method",
         ALL_IMPORTANCE_METHODS,
         index=0,
     )
-    prompt = st.text_input("prompt", "Hello, my name is")
+    prompt = st.text_input("Prompt", "Hello, my name is")
     prompt = str(prompt).strip()
-    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=100, value=10)
+    max_new_tokens = st.number_input(
+        "Number of new tokens to generate", min_value=1, max_value=100, value=10
+    )
     checkbox_show_scores = st.checkbox("Show details", value=True)
     if not str(prompt).strip():
         return
