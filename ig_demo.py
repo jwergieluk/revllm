@@ -1,47 +1,26 @@
 import time
-import warnings
 
 import torch
 
-from ig_demo_utils import *
-warnings.filterwarnings("ignore")
+from revllm.model_wrapper import ModelWrapper
 
-import logging
-
-logging.getLogger("transformers").setLevel(logging.ERROR)
-
-from transformers import GPT2Tokenizer
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
 start_time = time.time()
-tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model_wrapper = ModelWrapper("gpt2", device_type=device)
 
 context = "What is the capital of France?"
-
-print(f"Initial context: {context}")
-print("")
-context_with_prediction = predict_hf(context)
-
-print(context_with_prediction)
-print("")
-
 num_tokens_to_generate = 9
+print("Predicted tokens, with importance scores:")
 
-attributions_dict = {}
-print("Predicted tokens, with attributions in order:")
-print("(note: the first tokens are spaces)")
-
+score_generator = model_wrapper.yield_importance_integrated_gradients(
+    context, num_tokens_to_generate
+)
 for _ in range(num_tokens_to_generate):
-    predicted_token, predicted_token_id, input_ids, attention_mask, attributions = igs_nano(context)
-    attributions_dict[predicted_token] = attributions
-
-    # Append the predicted token ID to the input
-    predicted_token_tensor = torch.tensor([[predicted_token_id]], dtype=torch.long).to(device)
-    input_ids = torch.cat((input_ids, predicted_token_tensor), dim=1).to(device)
-    context = tokenizer.decode(input_ids[0])
+    score = next(score_generator)
+    print(f"Predicted Token: {score.output_token}")
+    print("")
+    print(score.get_input_score_df())
+    print("")
 
 end_time = time.time()
 print(f"Time elapsed: {end_time - start_time}")
-print("")
-print(tokenizer.decode(input_ids[0]))

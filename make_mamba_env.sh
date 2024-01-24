@@ -18,4 +18,6 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 ENV_NAME="revllm"
 $MAMBA create -n "${ENV_NAME}" -c conda-forge --channel-priority strict --file conda_packages.txt --yes
-$MAMBA run -n ${ENV_NAME} pip install --upgrade -r pip_packages.txt
+if [ -f "${DIR}/pip_packages.txt" ]; then
+    $MAMBA run -n ${ENV_NAME} pip install --upgrade -r pip_packages.txt
+fi

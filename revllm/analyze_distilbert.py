@@ -262,7 +262,9 @@ class AnalyzeQAndA:
             {
                 "Word(Index), Attribution": [
                     f"{word} ({pos}), {round(val.item(), 2)}"
-                    for word, pos, val in zip(top_words_end, top_words_ind_end, top_words_val_end, strict=False)
+                    for word, pos, val in zip(
+                        top_words_end, top_words_ind_end, top_words_val_end, strict=False
+                    )
                 ]
             }
         )
