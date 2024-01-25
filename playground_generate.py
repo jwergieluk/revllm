@@ -1,13 +1,14 @@
 import torch
 
-from demo import get_model_wrapper, reformat_lines
+from revllm.helpers import reformat_lines
+from revllm.model_wrapper import ModelWrapper
 
 prompt = "Hello, my name is"
 max_new_tokens = 50
 temperature = 0.9
 
 device = "gpu" if torch.cuda.is_available() else "cpu"
-wrapper = get_model_wrapper("gpt2", device_name=device)
+wrapper = ModelWrapper("gpt2", device_type=device, compiled=False)
 
 generated_text = wrapper.generate(prompt, max_new_tokens, temperature)
 
