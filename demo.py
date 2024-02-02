@@ -11,6 +11,7 @@ from streamlit_extras.word_importances import format_word_importances
 from demo_tokenizers import display_words_as_dataframe, show_page_tokenizer
 from revllm.helpers import reformat_lines
 from revllm.model_wrapper import ModelWrapper
+from revllm.prompts import get_daily_prompts
 
 APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
 SUPPORTED_MODELS = ("", "gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl")
@@ -222,10 +223,15 @@ def show_page_token_embeddings(wrapper: ModelWrapper):
 
 def show_page_generate(wrapper: ModelWrapper):
     st.markdown("## Generate")
-    prompt = st.text_input("Input text", "Hello, my name is")
+    sample_prompts = [''] + get_daily_prompts(20)
+    selected_sample_prompt = st.selectbox('Sample prompts', sample_prompts)
+    prompt = st.text_input("User prompt", '')
     checkbox_reformat_output = st.checkbox("Reformat output", value=True)
-    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=250)
+    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=35)
     temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
+
+    prompt = str(prompt).strip()
+    prompt = prompt if prompt else selected_sample_prompt
     if not str(prompt).strip():
         return
 
@@ -251,8 +257,13 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
         ALL_IMPORTANCE_METHODS,
         index=0,
     )
-    prompt = st.text_input("Prompt", "Hello, my name is")
+
+    sample_prompts = [''] + get_daily_prompts(20)
+    selected_sample_prompt = st.selectbox('Sample prompts', sample_prompts)
+    prompt = st.text_input("User prompt", '')
+
     prompt = str(prompt).strip()
+    prompt = prompt if prompt else selected_sample_prompt
     max_new_tokens = st.number_input(
         "Number of new tokens to generate", min_value=1, max_value=100, value=10
     )
