@@ -12,7 +12,10 @@ context = "What is the capital of France?"
 num_tokens_to_generate = 9
 print("Predicted tokens, with importance scores:")
 
-score_generator = model_wrapper.yield_importance_integrated_gradients(context)
+#run whichever you want to see
+# score_generator = model_wrapper.yield_importance_integrated_gradients(context)
+score_generator = model_wrapper.yield_importance_sequential_integrated_gradients(context)
+
 for _ in range(num_tokens_to_generate):
     score = next(score_generator)
     print(f"Predicted Token: {score.output_token}")
