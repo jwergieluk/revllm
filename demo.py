@@ -225,10 +225,10 @@ def show_page_token_embeddings(wrapper: ModelWrapper):
             st.caption("Too many tokens to display.")
 
 
-def get_prompt() -> str:
+def get_prompt(default_prompt: str = "") -> str:
     sample_prompts = [""] + get_daily_prompts(20)
     selected_sample_prompt = st.selectbox("Sample prompts", sample_prompts)
-    prompt = st.text_input("User prompt", "")
+    prompt = st.text_input("User prompt", default_prompt)
 
     prompt = str(prompt).strip()
     prompt = prompt if prompt else selected_sample_prompt
@@ -262,7 +262,7 @@ def show_page_generate(wrapper: ModelWrapper):
 
 def show_page_logit_lens(wrapper: ModelWrapper):
     st.header("Logit Lens")
-    prompt = get_prompt()
+    prompt = get_prompt("Specifically, we train GPT-3, an")
 
     if not prompt:
         return
