@@ -45,6 +45,7 @@ I will destroy the world!
 He will destroy the world!
 She will destroy the world!
 You shall not pass!
+I mean no harm.
 """
 
 QUESTIONS = """

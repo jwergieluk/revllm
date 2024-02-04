@@ -1,12 +1,13 @@
 from collections.abc import Generator
 from contextlib import nullcontext
+from dataclasses import dataclass
 
 import pandas as pd
 import tiktoken
 import torch
 from tiktoken import Encoding
 
-from revllm.gpt import GPT, GPTOutput
+from revllm.gpt import GPT
 
 
 class TokenizerWrapper:
@@ -73,6 +74,16 @@ class PromptImportance:
                 "score": self.input_token_scores,
             }
         )
+
+
+@dataclass
+class LogitLensData:
+    hidden_state_most_likely_token_df: pd.DataFrame
+    hidden_state_most_likely_token_ids: torch.Tensor
+    hidden_state_logits: torch.Tensor
+    hidden_state_max_logits: torch.Tensor
+    output_token_ids: int
+    output_token: str
 
 
 class ModelWrapper:
@@ -142,18 +153,48 @@ class ModelWrapper:
                 )
                 return self.tokenizer.decode(y[0].tolist())
 
-    def run_logit_lens(self, prompt: str) -> tuple[GPTOutput, list[list[str]]]:
+    def run_logit_lens(self, prompt: str):
         x = self.tokenizer.encode(prompt)
         with torch.no_grad():
             with self.ctx:
                 x = self.model.truncate_to_block_size(x)
                 output = self.model.forward_with_diagnostics(x)
 
-        hidden_state_tokens = [
-            [self.tokenizer.decode_single_token(t) for t in token_ids.tolist()]
-            for token_ids in output.hidden_state_most_likely_token_ids
+                hidden_state_logits = torch.cat(
+                    output.hidden_state_logits, dim=0
+                )  # num_layers, num_tokens, n_vocab
+                device = hidden_state_logits.device
+                num_layers, num_tokens, n_vocab = hidden_state_logits.size()
+                hidden_state_most_likely_token_ids = torch.argmax(hidden_state_logits, dim=-1)
+                pos = torch.arange(0, num_tokens, dtype=torch.long, device=device)
+                hidden_state_max_logits = hidden_state_logits[
+                    :, pos, hidden_state_most_likely_token_ids
+                ][0]
+
+        hidden_state_most_likely_token = [
+            [
+                self.tokenizer.decode_single_token(hidden_state_most_likely_token_ids[i, j])
+                for j in range(num_tokens)
+            ]
+            for i in range(num_layers)
         ]
-        return output, hidden_state_tokens
+        output_token_id = torch.argmax(output.logits[0, 0, :]).item()
+        output_token = self.tokenizer.decode_single_token(output_token_id)
+
+        input_tokens = self.tokenizer.decode_tokens_separately(x[0].tolist())
+        columns = [f"{i}_{t}" for i, t in enumerate(input_tokens)]
+        hidden_state_most_likely_token_df = pd.DataFrame(
+            hidden_state_most_likely_token, columns=columns
+        )
+        output = LogitLensData(
+            hidden_state_most_likely_token_df,
+            hidden_state_most_likely_token_ids,
+            hidden_state_logits,
+            hidden_state_max_logits,
+            output_token_id,
+            output_token,
+        )
+        return output
 
     def yield_importance_shap(self, prompt: str) -> Generator[PromptImportance, None, None]:
         pass

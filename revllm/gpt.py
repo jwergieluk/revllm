@@ -38,7 +38,6 @@ class GPTConfig:
 class GPTOutput:
     logits: torch.Tensor
     hidden_state_logits: list[torch.Tensor]
-    hidden_state_most_likely_token_ids: list[torch.Tensor]
     loss: float | None = None
 
 
@@ -243,33 +242,22 @@ class GPT(nn.Module):
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
         hidden_state_logits = []
-        hidden_state_most_likely_token_ids = []
-        hidden_state_max_logits = []
-
         # forward the GPT model itself
         tok_emb = self.transformer.wte(input_token_ids)  # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         with torch.no_grad():
             logits = self.lm_head(self.transformer.ln_f(x))
-            most_likely_token_ids = torch.argmax(logits, dim=-1)[0]
-            max_logits = logits[:, pos, most_likely_token_ids][0]
             hidden_state_logits.append(logits)
-            hidden_state_most_likely_token_ids.append(most_likely_token_ids)
-            hidden_state_max_logits.append(max_logits)
         for block in self.transformer.h:
             x = block(x)
             with torch.no_grad():
                 logits = self.lm_head(self.transformer.ln_f(x))
-                most_likely_token_ids = torch.argmax(logits, dim=-1)[0]
-                max_logits = logits[:, pos, most_likely_token_ids][0]
                 hidden_state_logits.append(logits)
-                hidden_state_most_likely_token_ids.append(most_likely_token_ids)
-                hidden_state_max_logits.append(max_logits)
         x = self.transformer.ln_f(x)
 
         logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
-        output = GPTOutput(logits, hidden_state_logits, hidden_state_most_likely_token_ids)
+        output = GPTOutput(logits, hidden_state_logits)
         return output
 
     def crop_block_size(self, block_size):

@@ -271,9 +271,12 @@ def show_page_logit_lens(wrapper: ModelWrapper):
     if not button_run:
         return
 
-    gpt_output, hidden_state_tokens = wrapper.run_logit_lens(prompt)
-    st.write(gpt_output)
-    st.write(hidden_state_tokens)
+    logit_lens_data = wrapper.run_logit_lens(prompt)
+
+    st.write(
+        f'Output token: _"{logit_lens_data.output_token}"_ ({logit_lens_data.output_token_ids})'
+    )
+    st.dataframe(logit_lens_data.hidden_state_most_likely_token_df)
 
 
 def show_page_prompt_importance(wrapper: ModelWrapper):
