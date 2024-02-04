@@ -251,7 +251,7 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         with torch.no_grad():
-            logits = self.lm_head(x)
+            logits = self.lm_head(self.transformer.ln_f(x))
             most_likely_token_ids = torch.argmax(logits, dim=-1)[0]
             max_logits = logits[:, pos, most_likely_token_ids][0]
             hidden_state_logits.append(logits)
@@ -260,7 +260,7 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x)
             with torch.no_grad():
-                logits = self.lm_head(x)
+                logits = self.lm_head(self.transformer.ln_f(x))
                 most_likely_token_ids = torch.argmax(logits, dim=-1)[0]
                 max_logits = logits[:, pos, most_likely_token_ids][0]
                 hidden_state_logits.append(logits)

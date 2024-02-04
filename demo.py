@@ -21,6 +21,7 @@ PAGE_MODEL_ARCHITECTURE = "Architecture"
 PAGE_TOKENIZER = "Tokenizer"
 PAGE_TOKEN_EMBEDDINGS = "Token Embeddings"
 PAGE_PROMPT_IMPORTANCE = "Prompt Importance"
+PAGE_LOGIT_LENS = "Logit Lens"
 PAGE_CIRCUIT_DISCOVERY = "Circuit Discovery"
 PAGE_GENERATE = "Generate"
 ALL_PAGES = (
@@ -29,6 +30,7 @@ ALL_PAGES = (
     PAGE_TOKEN_EMBEDDINGS,
     PAGE_GENERATE,
     PAGE_PROMPT_IMPORTANCE,
+    PAGE_LOGIT_LENS,
     PAGE_CIRCUIT_DISCOVERY,
 )
 
@@ -91,6 +93,8 @@ def main():
         show_page_token_embeddings(model_wrapper)
     if selected_page == PAGE_PROMPT_IMPORTANCE:
         show_page_prompt_importance(model_wrapper)
+    if selected_page == PAGE_LOGIT_LENS:
+        show_page_logit_lens(model_wrapper)
     if selected_page == PAGE_GENERATE:
         show_page_generate(model_wrapper)
 
@@ -225,7 +229,6 @@ def get_prompt() -> str:
     sample_prompts = [""] + get_daily_prompts(20)
     selected_sample_prompt = st.selectbox("Sample prompts", sample_prompts)
     prompt = st.text_input("User prompt", "")
-    temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
 
     prompt = str(prompt).strip()
     prompt = prompt if prompt else selected_sample_prompt
@@ -236,6 +239,7 @@ def show_page_generate(wrapper: ModelWrapper):
     st.header("Generate")
 
     prompt = get_prompt()
+    temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
     checkbox_reformat_output = st.checkbox("Reformat output", value=True)
     max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=35)
 
@@ -266,6 +270,10 @@ def show_page_logit_lens(wrapper: ModelWrapper):
     button_run = st.button("Run Logit Lens")
     if not button_run:
         return
+
+    gpt_output, hidden_state_tokens = wrapper.run_logit_lens(prompt)
+    st.write(gpt_output)
+    st.write(hidden_state_tokens)
 
 
 def show_page_prompt_importance(wrapper: ModelWrapper):
