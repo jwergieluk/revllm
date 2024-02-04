@@ -19,20 +19,43 @@ from torch.nn import functional as F
 from transformers import GPT2LMHeadModel
 
 
+@dataclass
+class GPTConfig:
+    block_size: int = 1024
+    vocab_size: int = (
+        50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
+    )
+    n_layer: int = 12
+    n_head: int = 12
+    n_embd: int = 768
+    dropout: float = 0.0
+    bias: bool = (
+        True  # True: bias in Linear and LayerNorms, like GPT-2. False: a bit better and faster
+    )
+
+
+@dataclass
+class GPTOutput:
+    logits: torch.Tensor
+    hidden_state_logits: list[torch.Tensor]
+    hidden_state_most_likely_token_ids: list[torch.Tensor]
+    loss: float | None = None
+
+
 class LayerNorm(nn.Module):
     """LayerNorm but with an optional bias. PyTorch doesn't support simply bias=False"""
 
-    def __init__(self, ndim, bias):
+    def __init__(self, ndim: int, bias):
         super().__init__()
         self.weight = nn.Parameter(torch.ones(ndim))
         self.bias = nn.Parameter(torch.zeros(ndim)) if bias else None
 
-    def forward(self, input):
-        return F.layer_norm(input, self.weight.shape, self.weight, self.bias, 1e-5)
+    def forward(self, x: torch.Tensor):
+        return F.layer_norm(x, self.weight.shape, self.weight, self.bias, 1e-5)
 
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
@@ -57,7 +80,7 @@ class CausalSelfAttention(nn.Module):
                 ),
             )
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -94,14 +117,14 @@ class CausalSelfAttention(nn.Module):
 
 
 class MLP(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         self.c_fc = nn.Linear(config.n_embd, 4 * config.n_embd, bias=config.bias)
         self.gelu = nn.GELU()
         self.c_proj = nn.Linear(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         x = self.c_fc(x)
         x = self.gelu(x)
         x = self.c_proj(x)
@@ -110,36 +133,21 @@ class MLP(nn.Module):
 
 
 class Block(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         self.ln_1 = LayerNorm(config.n_embd, bias=config.bias)
         self.attn = CausalSelfAttention(config)
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         x = x + self.attn(self.ln_1(x))
         x = x + self.mlp(self.ln_2(x))
         return x
 
 
-@dataclass
-class GPTConfig:
-    block_size: int = 1024
-    vocab_size: int = (
-        50304  # GPT-2 vocab_size of 50257, padded up to nearest multiple of 64 for efficiency
-    )
-    n_layer: int = 12
-    n_head: int = 12
-    n_embd: int = 768
-    dropout: float = 0.0
-    bias: bool = (
-        True  # True: bias in Linear and LayerNorms, like GPT-2. False: a bit better and faster
-    )
-
-
 class GPT(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config: GPTConfig):
         super().__init__()
         assert config.vocab_size is not None
         assert config.block_size is not None
@@ -196,18 +204,19 @@ class GPT(nn.Module):
         elif isinstance(module, nn.Embedding):
             torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
-    def forward(self, idx, targets=None):
-        device = idx.device
-        b, t = idx.size()
+    def forward(self, input_token_ids: torch.Tensor, targets=None):
+        device = input_token_ids.device
+        b, t = input_token_ids.size()
         assert (
             t <= self.config.block_size
         ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
         # forward the GPT model itself
-        tok_emb = self.transformer.wte(idx)  # token embeddings of shape (b, t, n_embd)
+        tok_emb = self.transformer.wte(input_token_ids)  # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
+
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
@@ -224,6 +233,44 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+
+    def forward_with_diagnostics(self, input_token_ids: torch.Tensor) -> GPTOutput:
+        device = input_token_ids.device
+        b, t = input_token_ids.size()
+        assert (
+            t <= self.config.block_size
+        ), f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+        pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
+
+        hidden_state_logits = []
+        hidden_state_most_likely_token_ids = []
+        hidden_state_max_logits = []
+
+        # forward the GPT model itself
+        tok_emb = self.transformer.wte(input_token_ids)  # token embeddings of shape (b, t, n_embd)
+        pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
+        x = self.transformer.drop(tok_emb + pos_emb)
+        with torch.no_grad():
+            logits = self.lm_head(x)
+            most_likely_token_ids = torch.argmax(logits, dim=-1)[0]
+            max_logits = logits[:, pos, most_likely_token_ids][0]
+            hidden_state_logits.append(logits)
+            hidden_state_most_likely_token_ids.append(most_likely_token_ids)
+            hidden_state_max_logits.append(max_logits)
+        for block in self.transformer.h:
+            x = block(x)
+            with torch.no_grad():
+                logits = self.lm_head(x)
+                most_likely_token_ids = torch.argmax(logits, dim=-1)[0]
+                max_logits = logits[:, pos, most_likely_token_ids][0]
+                hidden_state_logits.append(logits)
+                hidden_state_most_likely_token_ids.append(most_likely_token_ids)
+                hidden_state_max_logits.append(max_logits)
+        x = self.transformer.ln_f(x)
+
+        logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
+        output = GPTOutput(logits, hidden_state_logits, hidden_state_most_likely_token_ids)
+        return output
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -352,8 +399,18 @@ class GPT(nn.Module):
         mfu = flops_achieved / flops_promised
         return mfu
 
+    def truncate_to_block_size(self, x: torch.Tensor) -> torch.Tensor:
+        return x if x.size(1) <= self.config.block_size else x[:, -self.config.block_size :]
+
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(
+        self,
+        input_token_ids: torch.Tensor,
+        max_new_tokens: int,
+        temperature: float = 1.0,
+        top_k=None,
+        include_diagnostics: bool = False,
+    ):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -361,11 +418,13 @@ class GPT(nn.Module):
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = (
-                idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size :]
-            )
+            input_token_ids_truncated = self.truncate_to_block_size(input_token_ids)
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            if include_diagnostics:
+                output = self.forward_with_diagnostics(input_token_ids_truncated)
+                logits = output.logits
+            else:
+                logits, _ = self(input_token_ids_truncated)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
             # optionally crop the logits to only the top k options
@@ -377,6 +436,6 @@ class GPT(nn.Module):
             # sample from the distribution
             idx_next = torch.multinomial(probs, num_samples=1)
             # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
+            input_token_ids = torch.cat((input_token_ids, idx_next), dim=1)
 
-        return idx
+        return input_token_ids

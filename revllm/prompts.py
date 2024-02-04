@@ -1,7 +1,6 @@
 import datetime
 import random
 
-
 PERSONS = """
 Marry
 Alice
@@ -57,7 +56,7 @@ What is the path to liberation?
 
 
 def get_random_line(rng: random.Random, lines: str, seed: int = 9988) -> str:
-    lines = [line.strip() for line in lines.split('\n') if line.strip()]
+    lines = [line.strip() for line in lines.split("\n") if line.strip()]
     return rng.choice(lines)
 
 
@@ -76,10 +75,10 @@ def get_random_question(rng: random.Random):
 
 
 def get_daily_prompts(n: int = 10) -> list[str]:
-    seed_of_the_day = int(datetime.date.today().strftime('%Y%m%d'))
+    seed_of_the_day = int(datetime.date.today().strftime("%Y%m%d"))
     rng = random.Random(seed_of_the_day)
-    prompts = [get_random_statement(rng) for _ in range(n//2)]
-    prompts += [get_random_question(rng) for _ in range(n//2)]
+    prompts = [get_random_statement(rng) for _ in range(n // 2)]
+    prompts += [get_random_question(rng) for _ in range(n // 2)]
     return prompts
 
 

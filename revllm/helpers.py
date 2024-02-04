@@ -1,4 +1,3 @@
-
 def reformat_lines(input_string: str, max_line_len: int):
     # Split the input string into lines
     lines = input_string.splitlines()

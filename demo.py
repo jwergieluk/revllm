@@ -221,22 +221,29 @@ def show_page_token_embeddings(wrapper: ModelWrapper):
             st.caption("Too many tokens to display.")
 
 
-def show_page_generate(wrapper: ModelWrapper):
-    st.markdown("## Generate")
-    sample_prompts = [''] + get_daily_prompts(20)
-    selected_sample_prompt = st.selectbox('Sample prompts', sample_prompts)
-    prompt = st.text_input("User prompt", '')
-    checkbox_reformat_output = st.checkbox("Reformat output", value=True)
-    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=35)
+def get_prompt() -> str:
+    sample_prompts = [""] + get_daily_prompts(20)
+    selected_sample_prompt = st.selectbox("Sample prompts", sample_prompts)
+    prompt = st.text_input("User prompt", "")
     temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
 
     prompt = str(prompt).strip()
     prompt = prompt if prompt else selected_sample_prompt
-    if not str(prompt).strip():
+    return prompt
+
+
+def show_page_generate(wrapper: ModelWrapper):
+    st.header("Generate")
+
+    prompt = get_prompt()
+    checkbox_reformat_output = st.checkbox("Reformat output", value=True)
+    max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=35)
+
+    if not prompt:
         return
 
-    button_generate = st.button("Generate")
-    if not button_generate:
+    button_run = st.button("Generate")
+    if not button_run:
         return
 
     with st.spinner("Evaluating model..."):
@@ -249,6 +256,18 @@ def show_page_generate(wrapper: ModelWrapper):
     st.code(generated_text, language="text")
 
 
+def show_page_logit_lens(wrapper: ModelWrapper):
+    st.header("Logit Lens")
+    prompt = get_prompt()
+
+    if not prompt:
+        return
+
+    button_run = st.button("Run Logit Lens")
+    if not button_run:
+        return
+
+
 def show_page_prompt_importance(wrapper: ModelWrapper):
     st.header("Prompt Importance Analysis")
 
@@ -258,9 +277,9 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
         index=0,
     )
 
-    sample_prompts = [''] + get_daily_prompts(20)
-    selected_sample_prompt = st.selectbox('Sample prompts', sample_prompts)
-    prompt = st.text_input("User prompt", '')
+    sample_prompts = [""] + get_daily_prompts(20)
+    selected_sample_prompt = st.selectbox("Sample prompts", sample_prompts)
+    prompt = st.text_input("User prompt", "")
 
     prompt = str(prompt).strip()
     prompt = prompt if prompt else selected_sample_prompt

@@ -6,7 +6,7 @@ import tiktoken
 import torch
 from tiktoken import Encoding
 
-from revllm.gpt import GPT
+from revllm.gpt import GPT, GPTOutput
 
 
 class TokenizerWrapper:
@@ -119,7 +119,12 @@ class ModelWrapper:
         return str(self.model)
 
     def generate(
-        self, prompt: str, max_new_tokens: int = 150, temperature: float = 0.8, top_k: int = 200
+        self,
+        prompt: str,
+        max_new_tokens: int = 150,
+        temperature: float = 0.8,
+        top_k: int = 200,
+        include_diagnostics: bool = False,
     ) -> str:
         """
         temperature: 1.0 = no change, < 1.0 = less random, > 1.0 = more random, in predictions
@@ -128,8 +133,27 @@ class ModelWrapper:
         x = self.tokenizer.encode(prompt)
         with torch.no_grad():
             with self.ctx:
-                y = self.model.generate(x, max_new_tokens, temperature=temperature, top_k=top_k)
+                y = self.model.generate(
+                    x,
+                    max_new_tokens,
+                    temperature=temperature,
+                    top_k=top_k,
+                    include_diagnostics=include_diagnostics,
+                )
                 return self.tokenizer.decode(y[0].tolist())
+
+    def run_logit_lens(self, prompt: str) -> tuple[GPTOutput, list[list[str]]]:
+        x = self.tokenizer.encode(prompt)
+        with torch.no_grad():
+            with self.ctx:
+                x = self.model.truncate_to_block_size(x)
+                output = self.model.forward_with_diagnostics(x)
+
+        hidden_state_tokens = [
+            [self.tokenizer.decode_single_token(t) for t in token_ids.tolist()]
+            for token_ids in output.hidden_state_most_likely_token_ids
+        ]
+        return output, hidden_state_tokens
 
     def yield_importance_shap(self, prompt: str) -> Generator[PromptImportance, None, None]:
         pass
@@ -148,7 +172,9 @@ class ModelWrapper:
             input_embeddings = self.model.transformer.wte(input_token_ids).to(
                 self.device_type
             )  # [1, context_length, embedding_dimension]
-            baseline_input_ids = torch.zeros_like(input_token_ids).to(self.device_type)  # [1, context_length]
+            baseline_input_ids = torch.zeros_like(input_token_ids).to(
+                self.device_type
+            )  # [1, context_length]
             baseline_embeddings = self.model.transformer.wte(baseline_input_ids).to(
                 self.device_type
             )  # [1, context_length, embedding_dimension]
@@ -157,13 +183,17 @@ class ModelWrapper:
             output_logits = self.model(input_token_ids)[0]  # [1, 1, 50257]
             next_token_logits = output_logits[0, 0, :]  # [50257]
             predicted_token_id = torch.argmax(next_token_logits).item()  # [1]
-            
+
             position_ids = (
                 torch.arange(0, input_embeddings.size(1)).unsqueeze(0).to(self.device_type)
             )  # [1, context_length]
-            position_embeddings = self.model.transformer.wpe(position_ids)  # [1, context_length, embedding_dimension]
+            position_embeddings = self.model.transformer.wpe(
+                position_ids
+            )  # [1, context_length, embedding_dimension]
 
-            igs = torch.zeros_like(baseline_embeddings).to(self.device_type)  # [1, context_length, embedding_dimension]
+            igs = torch.zeros_like(baseline_embeddings).to(
+                self.device_type
+            )  # [1, context_length, embedding_dimension]
             for target_word_index in range(input_embeddings.size(1)):
                 target_word_embedding = input_embeddings[0, target_word_index, :].unsqueeze(
                     0
@@ -183,16 +213,28 @@ class ModelWrapper:
                 step_embeddings.retain_grad()
                 step_embeddings.grad = None
 
-                forward_embeddings = input_embeddings.repeat(n_steps, 1, 1)  # [n_steps, context_length, embedding_dimension]
+                forward_embeddings = input_embeddings.repeat(
+                    n_steps, 1, 1
+                )  # [n_steps, context_length, embedding_dimension]
                 forward_embeddings[:, target_word_index, :] = step_embeddings
-                forward_embeddings = forward_embeddings + position_embeddings  # [n_steps, context_length, embedding_dimension]
-                forward_embeddings = self.model.transformer.drop(forward_embeddings)  # [n_steps, context_length, embedding_dimension]
+                forward_embeddings = (
+                    forward_embeddings + position_embeddings
+                )  # [n_steps, context_length, embedding_dimension]
+                forward_embeddings = self.model.transformer.drop(
+                    forward_embeddings
+                )  # [n_steps, context_length, embedding_dimension]
 
                 for block in self.model.transformer.h:
-                    forward_embeddings = block(forward_embeddings)  # [n_steps, context_length, embedding_dimension]
+                    forward_embeddings = block(
+                        forward_embeddings
+                    )  # [n_steps, context_length, embedding_dimension]
 
-                forward_embeddings = self.model.transformer.ln_f(forward_embeddings)  # [n_steps, context_length, embedding_dimension]
-                output_at_step = self.model.lm_head(forward_embeddings)  # [n_steps, context_length, 50257]
+                forward_embeddings = self.model.transformer.ln_f(
+                    forward_embeddings
+                )  # [n_steps, context_length, embedding_dimension]
+                output_at_step = self.model.lm_head(
+                    forward_embeddings
+                )  # [n_steps, context_length, 50257]
 
                 class_output_at_step = output_at_step[:, -1, predicted_token_id]  # [n_steps]
                 class_output_at_step.backward(
@@ -206,7 +248,9 @@ class ModelWrapper:
                 target_word_igs = target_word_igs * (
                     target_word_embedding - target_word_baseline
                 )  # [1, embedding_dimension]
-                igs[:, target_word_index, :] = target_word_igs  # [1, context_length, embedding_dimension]
+                igs[
+                    :, target_word_index, :
+                ] = target_word_igs  # [1, context_length, embedding_dimension]
             attributions = igs.sum(dim=-1).squeeze(0)
             attributions = attributions / torch.norm(attributions)
 
@@ -243,7 +287,9 @@ class ModelWrapper:
             )  # [1, context_length, embedding_dimension]
             embedding_dimension = input_embeddings.shape[-1]
             context_length = input_embeddings.shape[1]
-            baseline_input_ids = torch.zeros_like(input_token_ids).to(self.device_type)  # [1, context_length]
+            baseline_input_ids = torch.zeros_like(input_token_ids).to(
+                self.device_type
+            )  # [1, context_length]
             baseline_embeddings = self.model.transformer.wte(baseline_input_ids).to(
                 self.device_type
             )  # [1, context_length, embedding_dimension]
@@ -252,48 +298,79 @@ class ModelWrapper:
             output_logits = self.model(input_token_ids)[0]  # [1, 1, 50257]
             next_token_logits = output_logits[0, 0, :]  # [50257]
             predicted_token_id = torch.argmax(next_token_logits).item()  # [1]
-            
+
             position_ids = (
                 torch.arange(0, input_embeddings.size(1)).unsqueeze(0).to(self.device_type)
             )  # [1, context_length]
-            position_embeddings = self.model.transformer.wpe(position_ids)  # [1, context_length, embedding_dimension]
+            position_embeddings = self.model.transformer.wpe(
+                position_ids
+            )  # [1, context_length, embedding_dimension]
 
-            alphas = torch.linspace(0, 1, steps=n_steps).unsqueeze(-1).unsqueeze(-1).to(self.device_type)  # [n_steps, 1, 1]
+            alphas = (
+                torch.linspace(0, 1, steps=n_steps).unsqueeze(-1).unsqueeze(-1).to(self.device_type)
+            )  # [n_steps, 1, 1]
 
-                # expand all embeddings to n_steps
-            zeros_to_expand_embeddings = torch.zeros(n_steps, context_length, embedding_dimension).to(self.device_type)  # [n_steps, context_length, embedding_dimension]
-            input_embeddings_expanded = zeros_to_expand_embeddings + input_embeddings  # [n_steps, context_length, embedding_dimension]
-            baseline_embeddings_expanded = zeros_to_expand_embeddings + baseline_embeddings  # [n_steps, context_length, embedding_dimension]
-            position_embeddings_expanded = zeros_to_expand_embeddings + position_embeddings  # [n_steps, context_length, embedding_dimension]
+            # expand all embeddings to n_steps
+            zeros_to_expand_embeddings = torch.zeros(
+                n_steps, context_length, embedding_dimension
+            ).to(self.device_type)  # [n_steps, context_length, embedding_dimension]
+            input_embeddings_expanded = (
+                zeros_to_expand_embeddings + input_embeddings
+            )  # [n_steps, context_length, embedding_dimension]
+            baseline_embeddings_expanded = (
+                zeros_to_expand_embeddings + baseline_embeddings
+            )  # [n_steps, context_length, embedding_dimension]
+            position_embeddings_expanded = (
+                zeros_to_expand_embeddings + position_embeddings
+            )  # [n_steps, context_length, embedding_dimension]
 
-            input_embeddings_expanded_for_path = input_embeddings_expanded.clone()  # [n_steps, context_length, embedding_dimension]
+            input_embeddings_expanded_for_path = (
+                input_embeddings_expanded.clone()
+            )  # [n_steps, context_length, embedding_dimension]
             input_embeddings_at_steps = baseline_embeddings_expanded + alphas * (
-            input_embeddings_expanded_for_path - baseline_embeddings_expanded
+                input_embeddings_expanded_for_path - baseline_embeddings_expanded
             )
             input_embeddings_at_steps.requires_grad_(True)
             input_embeddings_at_steps.retain_grad()
 
-            forward_embeddings = input_embeddings_at_steps + position_embeddings_expanded  # [n_steps, context_length, embedding_dimension]
-            forward_embeddings = self.model.transformer.drop(forward_embeddings)  # [n_steps, context_length, embedding_dimension]
+            forward_embeddings = (
+                input_embeddings_at_steps + position_embeddings_expanded
+            )  # [n_steps, context_length, embedding_dimension]
+            forward_embeddings = self.model.transformer.drop(
+                forward_embeddings
+            )  # [n_steps, context_length, embedding_dimension]
 
             for block in self.model.transformer.h:
-                forward_embeddings = block(forward_embeddings)  # [n_steps, context_length, embedding_dimension]
+                forward_embeddings = block(
+                    forward_embeddings
+                )  # [n_steps, context_length, embedding_dimension]
 
-            forward_embeddings = self.model.transformer.ln_f(forward_embeddings)  # [n_steps, context_length, embedding_dimension]
-            output_logits_at_steps = self.model.lm_head(forward_embeddings)  # [n_steps, context_length, 50257]
+            forward_embeddings = self.model.transformer.ln_f(
+                forward_embeddings
+            )  # [n_steps, context_length, embedding_dimension]
+            output_logits_at_steps = self.model.lm_head(
+                forward_embeddings
+            )  # [n_steps, context_length, 50257]
 
-            predicted_token_outputs_at_steps = output_logits_at_steps[:, -1, predicted_token_id]  # [n_steps]
+            predicted_token_outputs_at_steps = output_logits_at_steps[
+                :, -1, predicted_token_id
+            ]  # [n_steps]
 
-            predicted_token_outputs_at_steps.backward(torch.ones_like(predicted_token_outputs_at_steps),
-                                                    retain_graph=True)  # [n_steps]
+            predicted_token_outputs_at_steps.backward(
+                torch.ones_like(predicted_token_outputs_at_steps), retain_graph=True
+            )  # [n_steps]
 
-                # extract gradients
+            # extract gradients
             assert input_embeddings_at_steps.grad is not None
-            ig_grads = input_embeddings_at_steps.grad  # [n_steps, context_length, embedding_dimension]
+            ig_grads = (
+                input_embeddings_at_steps.grad
+            )  # [n_steps, context_length, embedding_dimension]
             ig_grads = ig_grads.mean(dim=0).unsqueeze(0)  # [1, context_length, embedding_dimension]
 
-            igs = ig_grads*(input_embeddings - baseline_embeddings)  # [1, context_length, embedding_dimension]
-            igs = igs.squeeze(0) 
+            igs = ig_grads * (
+                input_embeddings - baseline_embeddings
+            )  # [1, context_length, embedding_dimension]
+            igs = igs.squeeze(0)
 
             attributions = igs.sum(dim=-1).squeeze(0)
             attributions = attributions / torch.norm(attributions)
