@@ -17,6 +17,7 @@ APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
 SUPPORTED_MODELS = ("", "gpt2", "gpt2-medium", "gpt2-large", "gpt2-xl")
 AVAILABLE_DEVICES = ("cpu", "cuda") if torch.cuda.is_available() else ("cpu",)
 
+PAGE_DOCS = "Documentation"
 PAGE_MODEL_ARCHITECTURE = "Architecture"
 PAGE_TOKENIZER = "Tokenizer"
 PAGE_TOKEN_EMBEDDINGS = "Token Embeddings"
@@ -25,6 +26,7 @@ PAGE_LOGIT_LENS = "Logit Lens"
 PAGE_CIRCUIT_DISCOVERY = "Circuit Discovery"
 PAGE_GENERATE = "Generate"
 ALL_PAGES = (
+    PAGE_DOCS,
     PAGE_MODEL_ARCHITECTURE,
     PAGE_TOKENIZER,
     PAGE_TOKEN_EMBEDDINGS,
@@ -42,6 +44,12 @@ ALL_IMPORTANCE_METHODS = (
 )
 
 st.set_page_config(page_title=APP_TITLE, page_icon=":microscope:")
+
+
+def display_markdown_file(md_file_name: str) -> None:
+    with open(md_file_name) as f:
+        md_file = f.read()
+    st.markdown(md_file)
 
 
 def get_memory_usage():
@@ -75,6 +83,7 @@ def main():
         index=0,
     )
     if not str(selected_model).strip():
+        display_markdown_file("docs/gpt-2.md")
         return
 
     model_wrapper = get_model_wrapper(selected_model, device_name=device)
@@ -85,6 +94,8 @@ def main():
     )
     st.sidebar.caption(f"Memory usage: {get_memory_usage():.0f} MB")
 
+    if selected_page == PAGE_DOCS:
+        display_markdown_file("docs/gpt-2.md")
     if selected_page == PAGE_MODEL_ARCHITECTURE:
         show_page_model_architecture(model_wrapper)
     if selected_page == PAGE_TOKENIZER:
