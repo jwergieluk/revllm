@@ -203,9 +203,7 @@ class GPT(nn.Module):
 
         # if we are given some desired targets also calculate the loss
         logits = self.lm_head(x)
-        loss = F.cross_entropy(
-            logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1
-        )
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
         return logits, loss
 
     def get_num_params(self, non_embedding: bool = True) -> int:
