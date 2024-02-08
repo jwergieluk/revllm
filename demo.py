@@ -49,7 +49,7 @@ st.set_page_config(page_title=APP_TITLE, page_icon=":microscope:")
 def display_markdown_file(md_file_name: str) -> None:
     with open(md_file_name) as f:
         md_file = f.read()
-    st.markdown(md_file)
+    st.markdown(md_file, unsafe_allow_html=True)
 
 
 def get_memory_usage():
