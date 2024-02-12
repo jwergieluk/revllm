@@ -1,4 +1,5 @@
 import os
+from operator import itemgetter
 
 import numpy as np
 import pandas as pd
@@ -9,7 +10,7 @@ import torch
 from streamlit_extras.word_importances import format_word_importances
 
 from demo_tokenizers import display_words_as_dataframe, show_page_tokenizer
-from revllm.helpers import reformat_lines
+from revllm.helpers import make_word_cloud, reformat_lines
 from revllm.model_wrapper import ModelWrapper
 from revllm.prompts import get_daily_prompts
 
@@ -50,6 +51,29 @@ def display_markdown_file(md_file_name: str) -> None:
     with open(md_file_name) as f:
         md_file = f.read()
     st.markdown(md_file, unsafe_allow_html=True)
+
+
+def display_vega_bar_chart(data: pd.DataFrame, description: str = "") -> None:
+    if data.empty:
+        return
+    category_col: str = data.columns[0]
+    value_col: str = data.columns[1]
+    spec = {
+        "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+        "description": description,
+        "encoding": {
+            "y": {"field": category_col, "type": "nominal"},
+            "x": {"field": value_col, "type": "quantitative"},
+        },
+        "layer": [
+            {"mark": "bar"},
+            {
+                "mark": {"type": "text", "align": "left", "baseline": "middle", "dx": 3},
+                "encoding": {"text": {"field": value_col, "type": "quantitative"}},
+            },
+        ],
+    }
+    st.vega_lite_chart(data, spec, use_container_width=True)
 
 
 def get_memory_usage():
@@ -273,7 +297,7 @@ def show_page_generate(wrapper: ModelWrapper):
 
 def show_page_logit_lens(wrapper: ModelWrapper):
     st.header("Logit Lens")
-    prompt = get_prompt("Specifically, we train GPT-3, an")
+    prompt = get_prompt("The capital of Japan is the city of ")
 
     if not prompt:
         return
@@ -297,6 +321,27 @@ def show_page_logit_lens(wrapper: ModelWrapper):
 
     st.caption("Logits")
     st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.subheader("Word clouds from token logits")
+    all_tokens = wrapper.tokenizer.get_all_tokens()
+    for i, layer in enumerate(descriptive_index):
+        st.write(f"Layer **{layer}**")
+
+        layer_probabilities: np.ndarray = (
+            logit_lens_data.hidden_state_probabilities[i, -1].squeeze().numpy()
+        )
+        p_cutoff = np.sort(layer_probabilities)[-20]
+
+        top_tokens = [
+            (all_tokens[i], p) for i, p in enumerate(layer_probabilities) if p >= p_cutoff
+        ]
+        top_tokens = sorted(top_tokens, key=itemgetter(1), reverse=True)
+        top_tokens_df = pd.DataFrame(data=top_tokens, columns=["token", "probability"])
+
+        word_cloud_array = make_word_cloud(all_tokens, layer_probabilities)
+
+        st.image(word_cloud_array)
+        display_vega_bar_chart(top_tokens_df, description=f"Top tokens in layer {layer}")
 
 
 def show_page_prompt_importance(wrapper: ModelWrapper):

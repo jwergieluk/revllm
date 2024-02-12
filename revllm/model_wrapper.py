@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pandas as pd
 import tiktoken
 import torch
+import torch.nn.functional as nn_func
 from tiktoken import Encoding
 
 from revllm.gpt import GPT
@@ -18,6 +19,9 @@ class TokenizerWrapper:
 
     def get_vocab_size(self) -> int:
         return self.tokenizer.max_token_value + 1
+
+    def get_all_tokens(self) -> list[str]:
+        return [self.decode_single_token(token) for token in range(self.get_vocab_size())]
 
     def encode(self, text: str) -> torch.Tensor:
         x = self.tokenizer.encode(text, allowed_special={"<|endoftext|>"})
@@ -81,6 +85,7 @@ class LogitLensData:
     hidden_state_most_likely_token_df: pd.DataFrame
     hidden_state_most_likely_token_ids: torch.Tensor
     hidden_state_logits: torch.Tensor
+    hidden_state_probabilities: torch.Tensor
     hidden_state_max_logits: torch.Tensor
     output_token_ids: int
     output_token: str
@@ -186,10 +191,12 @@ class ModelWrapper:
         hidden_state_most_likely_token_df = pd.DataFrame(
             hidden_state_most_likely_token, columns=columns
         )
+        hidden_state_probabilities = nn_func.softmax(hidden_state_logits, dim=-1)
         output = LogitLensData(
             hidden_state_most_likely_token_df,
             hidden_state_most_likely_token_ids,
             hidden_state_logits,
+            hidden_state_probabilities,
             hidden_state_max_logits,
             output_token_id,
             output_token,
