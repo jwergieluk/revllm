@@ -15,37 +15,38 @@ We construct a model NanoGPT, following the example given by Andrej Karpathy [(G
 
 - NanoGPT comes in 4 sizes: regular, medium, large, and extra large. 
 - All 4 sizes have the same architecture, but differ in weights and dimensions.
-- Like all llms, NanoGPT is a variant of the transformer architecture introduced in [2017](https://arxiv.org/pdf/1706.03762.pdf).
+- Like all llms, NanoGPT is a variant of the transformer model introduced in [2017](https://arxiv.org/pdf/1706.03762.pdf).
 - NanoGPT has the same architecture and weights as [gpt2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf), which is trained on a dataset of 8 million web pages. The out-of-the-box model can be imported from [Hugging Face](https://huggingface.co/docs/transformers/model_doc/gpt2).
 
 ### Architecture 
 
-All 4 sizes of NanoGPT follow the same architecture.  Differences between them lie in the sizes of individual components (see the "architecture" tab under the individual models). This section describes this architecture with dimensions excluded. We assume the reader is familiar with basics of a neural network such as linear, activation, and dropout layers, hence they are listed without comment.  Dropout layers are ignored during inference.
+Differences between NanoGPT versions lie in the numbers of layers, embedding dimensions, and weights of individual components (see the "architecture" tab under the individual models).  However, their architectures are identical. This section describes the models with dimensions excluded. We assume the reader is familiar with basics of a neural network such as linear, activation, and dropout layers, hence they are listed without comment.  
 
 For what follows: 
 - Let context be a string with length $c$.
 - Let $n$ be the embedding dimension for choice of model size. </br>
-- A tensor is a generalization of a vector.  Our model architecture employs pytorch tensors.
+- A tensor is a generalization of a vector.  Our model employs pytorch tensors.
 - Any discussion of batching or batching dimension is excluded.
-- Several steps described include matrix mulitplications with learnable weights. We describe the functionality omitting such details. Exceptions are found under the "Informative Details" section. 
-
-Layers will follow the format: 
-- <u>Layer description</u> `(layer_name)`, for elements of the architecture
-- <u>[Layer description]</u>, for elements of the work flow, but not the architecture
+- Several steps described include matrix mulitplications with learnable weights. We describe the functionality omitting such details. Exceptions are found under the "Transformer-Specific Details." 
+- Dropout layers are included, but are ignored during model inference.
+- Layers will follow the format: 
+  - <u>Layer description</u> `(layer_name)`, for elements of the architecture
+  - <u>[Layer description]</u>, for elements of the work flow, but not the architecture
 
 #### Preprocessing
 
-- <u>Tokenization</u>: The tokenizer separates context into a $c$-length list of discrete tokens, one of 50257 choices (the model's vocabulary length).
-- <u>Input_ids</u>: a $c$-length tensor is populated by each token mapped to an integer from $[0,50256]$.
-- <u>Position_ids</u>: A tensor $[0,1, \ldots, c-1]$ is generated.
+- <u>[Tokenization]</u>: The tokenizer separates context into a $c$-length list of discrete tokens, one of 50257 choices (the model's vocabulary length).
+- <u>[Input_ids]</u>: a $c$-length tensor is populated by each token mapped to an integer from $[0,50256]$.
+- <u>[Position_ids]</u>: A tensor $[0,1, \ldots, c-1]$ is generated.
 
 #### Embedding Layers
 
 - <u>Token embedding</u> `(wte)`: Each input_id in input_ids is mapped to a tensor in $\mathbb{R}^n$.
   - Note: the path $(x' + \alpha (x - x'))$ for integrated gradients below is in this embedding space.
+  - For some comments about the matrix $M$ in the embedding layer, see the weight tying section.
 - <u>Position embedding</u> `(wpe)`: Each position_id in position_ids is embedded into a tensor in $\mathbb{R}^n$.
 - <u>[Additive step]</u>: x = token_embedding + position_embedding
-- <u>Dropout</u> ""
+- <u>Dropout</u> `(drop)`
 
 #### Transformer Block
 
@@ -53,8 +54,8 @@ The number of repetitions of the transformer block architecture is dependent on 
   - <u>Layer Norm</u> `(ln_1)`
   - <u>Self-Attention</u> `(attn)`:
     - <u>Attention Initialization Layer</u> `(c_attn)` 
-      - <u>[Multi-Headed Self-Attention Sequence]</u> (see below):
-        - $Q_h, K_h, V_h =$ c_attn(x), for $1 \leq h \leq H$, where $H$ is the number of heads
+      - <u>[Multi-Headed Self-Attention Sequence]</u> (see the discussion below):
+        - $Q_h, K_h, V_h =$ c_attn(x), for $1 \leq h \leq H$, where $H$ is the number of heads.
         - $A_h = \text{softmax}\left(\frac{Q_hK_h^T}{\sqrt{n_h}}\right)$
         - x = Concat $(A_1V_1, \ldots, A_HV_H)$
     - <u>Linear</u> `(c_proj)`: output projection
@@ -63,55 +64,80 @@ The number of repetitions of the transformer block architecture is dependent on 
   - <u>[Additive step]</u>: x = x + attn(x)
   - <u>Layer Norm</u> `(ln_2)`
   - <u>Feed Forward</u> `(MLP)`
-    - <u>Linear</u> "`(c_fc)`"
+    - <u>Linear</u> `(c_fc)`
     - <u>Activation</u> `(GELU)`
     - <u>Linear</u> `(c_proj)`
     - <u>Dropout</u> `(dropout)`      
   - <u>[Additive Step]</u>: x = x + MLP(x)
 
 #### Layer Norm
-- <u>Layer Norm</u> "`(ln_f)`"
+- <u>Layer Norm</u> `(ln_f)`
 
 #### Language Model Head
 
 - <u>Language model head</u> `(lm_head)`: Token embeddings in dimension $n$ are converted to vocabulary-length tensors (see discussion below on weight tying).
 
-### Informative Details
+#### Final Interpretation
+
+Upon the output of the `(lm_head)` layer, we are given the raw $c \times 50257$ tensor ouput of the model, or "logits."  There are some final steps to completed for interpretations:
+
+- Apply softmax row-wise to transform each row into a probability space.
+- Translate to natural language: the details of which are a choice which can be made by setting random one would like the output to be, or "temperature."  I.e. a perfectly non-random temperature close to zero would output the token with the highest probability rather than choose from a collection of highest-scoring tokens, while a higher temperature would make the prediction more random.
+
+### Transformer-Specific Details
 
 #### Self-Attention
 
-Here we include a brief description of self attention as introduced in [2017](https://arxiv.org/pdf/1706.03762.pdf), but as it resides in our model.
+We include a brief description of self attention as it functions in our model.  For a full description, see the foundational [2017 paper](https://arxiv.org/pdf/1706.03762.pdf).
 
 ##### Single Headed Attention
 
-Let $H=1$.  The `(c_attn)` layer contains matrices $W^Q, W^K, W^V$, with learnable weights. Upon multiplication, x is separated into query, key, and value matrices $Q, K, V \in \mathbb{R}^{c \times n}$. The attention matrix is then defined:
+Suppose for the moment that the model has $H=1$ head (i.e. the embedding space is not subdivided during the attention mechanism).  The `(c_attn)` layer contains matrices $W^Q, W^K, W^V, W^O$, with learnable weights. Upon multiplication with the first three matrices, x is mapped to query, key, and value matrices $Q, K, V \in \mathbb{R}^{c \times n}$. The attention matrix is then $A = \text{softmax}(S) \in \mathbb{R}^{c \times c}$ computed by applying softmax row-wise to the matrix $S$ defined by:
 
 $$
-A = \text{softmax}\left(\frac{QK^T}{\sqrt{n}}\right) \in \mathbb{R}^{c \times c}
+S_{i,j} := 
+\begin{cases} 
+-\infty & \text{if }  i < j\\ \\
+\left(\frac{QK^T}{\sqrt{n}}\right)_{i,j} & \text{otherwise}
+\end{cases}
+
 $$
 
-The final step before `(c_proj)` is x = $AV$.
+The final output of the self attention layer is: x = $(AV)W^O$.
 
-Notes:
-- $A_{i,j}$ numerically  represents a relationship or 'attention' the model pays from token $i$ to token $j$. 
-- The scaling factor $\frac{1}{\sqrt{n}}$ is a performance-improvement feature.
-- Softmax normalizes the attention scores to probabilities. 
-- In general instead of the term $\sqrt{n}$, transformer architectures mention $\sqrt{d_k}$ (see the 2017 paper).  It is not a requirement that the $Q, K, V$ matrices have dimensions equal to the embedding dimension.  But for our model, they will.
-- In general transformers, $V$ may not share the dimensions as the other two matrices.
+Upon application of softmax:
+  - <u>$A$ is Lower-Triangular</u>, since arbitrarily large negative values of $S$ are a masking condition, as they map arbitrarily close to $0$.  The entry $a_{i,j}$ numerically represents a relationship or 'attention' the model pays from token $i$ to token $j$.  When predicting a next token, the model can only attend to previously seen elements and not to future ones, hence they are nonzero only when $i \geq j$.
+  - <u>The rows of $A$ are probability vectors</u>: The multiplication $AV$ therefore yields a weighted sum of the values in $V$ for each token. The current attention focus can be thought of as being distributed across the input context.
+
+Additional notes (for further explanation, see the 2017 paper linked above):
+
+- With this lower triangularity, NanoGPT is a "decoder-only" model, to be distinguished from models which contain an encoder block.
+- The scaling factor $\frac{1}{\sqrt{n}}$ is an important performance-improvement feature for softmax use (here we omit details).
+- In general, instead of the term $\sqrt{n}$, transformer architectures typically discuss $\sqrt{d_k}$.  It is not a requirement that the $Q, K, V$ matrices have a dimension equal to the embedding dimension.  But for our model, they will.
+- In general transformers, $V$ may not have identical dimensions to $Q$ and $K$.
+- "Self-attention" refers to the fact that $Q, K,$ and $V$ all come from the input x.  Alternatively, $K$ and $V$ can come from alternate sources, as in "cross-attention."
 
 ##### Muli-Headed Attention
 
-Let $H \geq 1$ be arbitrary.  `(c_attn)` actually subdivides $n$ into $H$-many separate "heads."  Multi-headed attention allows the model to jointly attend to information from different representation subspaces at different positions.  For $1 \leq h \leq H$, we are given:
+In reality, for transformer models the self-attention mechanism subdivides the embedding space into $H > 1$ distinct subspaces called "heads." The `(c_attn)` layer has matrices $W_h^Q, W_h^K, W_h^V,$ and also contains the full-dimensional output matrix $W^O$. Through the first three, x maps to matrices $Q_h,K_h,V_h \in \mathbb{R}^{c \times n_h}$, for $1 \leq h \leq H$, where $n = \sum_h n_h$.
+
+
+In each size of our NanoGPT, $H$ divides $n$.  For every $h$, $n_h = \frac{n}{H}$, and $A_h = \text{softmax}(S_h) \in \mathbb{R}^{c \times c}$, where: 
 
 $$
-A_h = \text{softmax}\left(\frac{Q_hK_h^T}{\sqrt{n_h}}\right)
+\big(S_h\big)_{i,j} := 
+\begin{cases} 
+-\infty & \text{if }  i < j\\ \\
+\left(\frac{Q_hK_h^T}{\sqrt{n_h}}\right)_{i,j} & \text{otherwise}
+\end{cases}
 $$
 
-The final step before `(c_proj)` is x = Concat $(A_1V_1, \ldots, A_HV_H)$.
+The final output of the self attention layer is: x = Concat $(A_1V_1, \ldots, A_HV_H)W^O$.
 
-Notes:
-- $n = \sum_{h} n_h$.
-- For our model, $n_i = n_j$ for all $i,j \in \lbrace 1, \ldots, H \rbrace$ (hence $H|n$).  However, this fact is not a requirement for arbitrary transformer models.
+Benefits of multi-headed attention include:
+
+- <u>Increased capacity</u>: By allowing the model to process different representations or features of the input data in parallel, each head can "focus" on different aspects of the input, enhancing the model's ability to capture complex dependencies and nuances.
+- <u>Computational efficiency</u>: The computation of the attention matrix can be parallelized across heads. 
 
 #### Weight Tying of Embedding and Output Projection Matrices
 
@@ -120,7 +146,7 @@ Our model has a learned embedding matrix $M \in \mathbb{R}^{50257 \times n}$.
 - <u>Embedding Matrix Lookup</u>: In the embedding `(wte)` layer, the input_ids contain $c$-many indices,  and the $c \times n$ resulting matrix is constructed from the corresponding rows of $M$.
 - <u>Output Projection</u>: In the `(lm_head)` layer, the $c \times n$ existing state is projected to the vocabulary space by transposing the same matrix: $M^T \in \mathbb{R}^{n \times 50257}$.
 
-This matrix repetition is a performance improvement feature known as [weight tying](https://arxiv.org/pdf/1608.05859v3.pdf), and is common in transformer architectures.
+In other words, the input and output matrices are the same, just transposed.  This matrix repetition is a performance improvement feature known as [weight tying](https://arxiv.org/pdf/1608.05859v3.pdf), and is common in transformer architectures.
 
 Additional note: position embedding `(wpe)` is constructed similarly to `(wte)`, but through a different lookup matrix.
 
@@ -148,7 +174,7 @@ Feature attribution is a feature importance method for machine learning models. 
 - <u>Computationally expensive</u>
 
 
-## Feature Attribution Methods
+### Feature Attribution Methods
 
 Methods to compute feature attributions include: CAM, Grad-CAM, LIME, Integrated Gradients, DeepLIFT, SHAP, SmoothGrad, Anchors, CEM, This looks like that, XRAI, and Contrastive Explanations, among others.  Furthermore, several methods have variants for different contexts. 
 
@@ -187,4 +213,36 @@ $$
 Where the number of steps by default is $m=50$.
 
 
-# Other analysis methods
+## Logit Lens
+
+Recall from above that the term "logits" is commonly used to describe the final raw output of the model, before any softmax transformation and subsequent translation to natural language. 
+
+ Internal to the model, each pass through NanoGPT's transformer block maps a $c \times n$ embedding tensor to another $c \times n$ tensor.  We include an implementation of [logit lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), a tool which transforms these embeddings into logits:
+
+
+- After each block, we extract the embeddings and run them through the final layers of the model (ln_f, lm_head), giving us logits at each layer. 
+- We can then complete the final post-processing steps and view next token generation up to that point.  These steps display how the model gradually converges to a final prediction.
+- This window gives an insight as to what the model believes after each block, and how it evolves.
+- In contrast to other model internals such as the attention mechanism, this window indicates what the model believes at a step, not how.  However, viewing how the model updates its understanding over time can give a good insight to its functionality.
+
+### Note About Sub-Token Predictiton
+
+The visual display of logit lens contains a prediction along with every word of the context.  Due to the sequential nature of how models like NanoGPT work, predictions are generated for every sub-context which starts from the first word.  The final model prediction is the last of all such predictions.  As the logit lens display shows its evolution, it does so for each of these sub-token predictions as well.
+
+# References
+
+- Garbin, C. (n.d.). A gentle introduction to the concepts of machine learning interpretability, feature attribution, and SHAP. Retrieved from https://cgarbin.github.io/machine-learning-interpretability-feature-attribution
+
+- Karpathy, A. nanoGPT [Software]. GitHub. https://github.com/karpathy/nanoGPT
+
+- Krishna, Satyapriya, Tessa Han, Alex Gu, Javin Pombra, Shahin Jabbari, Steven Wu and Himabindu Lakkaraju. “The Disagreement Problem in Explainable Machine Learning: A Practitioner's Perspective.” ArXiv abs/2202.01602 (2022)
+
+- Press, Ofir and Lior Wolf. “Using the Output Embedding to Improve Language Models.” Conference of the European Chapter of the Association for Computational Linguistics (2016).
+
+- Radford, Alec, Jeff Wu, Rewon Child, David Luan, Dario Amodei and Ilya Sutskever. “Language Models are Unsupervised Multitask Learners.” (2019). OpenAI Blog.
+
+- Sundararajan, Mukund, Ankur Taly and Qiqi Yan. “Axiomatic Attribution for Deep Networks.” International Conference on Machine Learning (2017).
+
+- Vaswani, Ashish, Noam M. Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin. “Attention is All you Need.” Neural Information Processing Systems (2017).
+
+- Logit lens: https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens
