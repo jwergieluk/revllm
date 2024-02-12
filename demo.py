@@ -33,7 +33,7 @@ ALL_PAGES = (
     PAGE_GENERATE,
     PAGE_PROMPT_IMPORTANCE,
     PAGE_LOGIT_LENS,
-    #PAGE_CIRCUIT_DISCOVERY,
+    # PAGE_CIRCUIT_DISCOVERY,
 )
 
 IMPORTANCE_INTEGRATED_GRADIENTS = "Integrated Gradients"
@@ -271,22 +271,6 @@ def show_page_generate(wrapper: ModelWrapper):
     st.code(generated_text, language="text")
 
 
-def background_color(data_df: pd.DataFrame, color_value_df: pd.DataFrame) -> pd.DataFrame:
-    min_val, max_val = color_value_df.min().min(), color_value_df.max().max()
-    style_rows = []
-    for i in range(len(data_df.index)):
-        row = []
-        for c_i in range(len(data_df.columns)):
-            value = data_df.iloc[i, c_i]
-            normalized_value = (value - min_val) / (max_val - min_val)
-            intensity = int(255 * (1 - normalized_value))
-            color_code = f"rgb(255, {intensity}, {intensity})"
-            row.append(f"background-color: {color_code}")
-        style_rows.append(row)
-    style_df = pd.DataFrame(style_rows, columns=data_df.columns, index=data_df.index)
-    return style_df
-
-
 def show_page_logit_lens(wrapper: ModelWrapper):
     st.header("Logit Lens")
     prompt = get_prompt("Specifically, we train GPT-3, an")
@@ -305,10 +289,14 @@ def show_page_logit_lens(wrapper: ModelWrapper):
     )
     df = logit_lens_data.hidden_state_most_likely_token_df
     max_logits_df = pd.DataFrame(logit_lens_data.hidden_state_max_logits, columns=df.columns)
-    st.dataframe(max_logits_df)
+    descriptive_index = [f"h_{i}_out" for i in df.index]
+    df.index = descriptive_index
+    max_logits_df.index = descriptive_index
+    st.caption("Tokens")
+    st.dataframe(df.style.background_gradient(cmap="Blues", axis=None, gmap=max_logits_df))
 
-    df.style.apply(background_color, color_value_df=max_logits_df)
-    st.dataframe(df)
+    st.caption("Logits")
+    st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
 
 
 def show_page_prompt_importance(wrapper: ModelWrapper):
