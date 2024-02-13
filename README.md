@@ -15,11 +15,36 @@ language processing.
 
 ## Features
 
+- **Extensive Model and Method Documentation**. Documentation is available directly in the provided streamlit dashboard.
+- **GPT-2 Models**: Automatic download and usage of GPT-2 models (thanks to Huggingface integration).
 - **Model Analysis**: Deep insights into transformer language models.
-- **Explainability Tools**: Easy-to-use methods to understand model decisions.
-- **Compatibility with nanoGPT**: Built upon a reliable and efficient base.
-- **User-Friendly Interface**: Designed for both novice and expert users.
 - **Code base**: Simple, easy-to-understand and self-contained.
+
+Feature rundown:
+
+### Tokenizer Analysis
+
+![tokenizer-analysis.png](docs/tokenizer-analysis.png)
+
+### Embedding Matrix Statistics and Visualization
+
+![embedding-matrix-insights.png](docs/embedding-matrix-insights.png)
+
+### Generation with Top-k Sampling and Temperature
+
+![prompt-completition.png](docs/prompt-completition.png)
+
+### Prompt Importance Analysis
+
+![prompt-importance-analysis.png](docs/prompt-importance-analysis.png)
+
+### Logit Lens
+
+![logit-lens-1.png](docs/logit-lens-1.png)
+
+![logit-lens-2.png](docs/logit-lens-2.png)
+
+![logit-lens-3.png](docs/logit-lens-3.png)
 
 ## Automatic Installation
 
