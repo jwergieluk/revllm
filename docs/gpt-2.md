@@ -91,7 +91,9 @@ The number of repetitions of the transformer block is dependent on nanoGPT size.
 Upon the output of the `(lm_head)` layer, we are given the raw $c \times 50257$ tensor ouput of the model, or "logits."  There are some final steps to completed for interpretations:
 
 - Apply softmax row-wise to transform each row into a probability space.
-- Translate to natural language: the details of which are a choice which can be made by setting random one would like the output to be, or "temperature."  I.e. a perfectly non-random temperature close to zero would output the token with the highest probability rather than choose from a collection of highest-scoring tokens, while a higher temperature would make the prediction more random.
+- Translate to natural language. The exact next-token selection is governed by a temperature parameter:
+  - Increasing the temperature parameter effectively smooths out the probability distribution, making the selection of various outcomes more uniform. This increase in uniformity raises the level of randomness or entropy in the outcomes.
+  - Lowering the temperature sharpens the probability distribution, which biases the selection towards more probable outcomes, thereby reducing randomness and leading to more deterministic outputs. Thus, a temperature very close to zero would predominantly choose the most probable outcome (token).
 
 ### Transformer-Specific Details
 
