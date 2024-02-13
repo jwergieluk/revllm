@@ -19,6 +19,7 @@ language processing.
 - **Explainability Tools**: Easy-to-use methods to understand model decisions.
 - **Compatibility with nanoGPT**: Built upon a reliable and efficient base.
 - **User-Friendly Interface**: Designed for both novice and expert users.
+- **Code base**: Simple, easy-to-understand and self-contained.
 
 ## Automatic Installation
 
