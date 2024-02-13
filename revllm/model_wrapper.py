@@ -91,6 +91,85 @@ class LogitLensData:
     output_token: str
 
 
+def top_k_intersection_score(
+    prob_tensor_a: torch.tensor, prob_tensor_b: torch.tensor, k: int
+) -> float:
+    """
+    Calculates the top-k intersection score between two 1D probability tensors.
+
+    The intersection score is based on the methodology defined in the paper:
+    https://arxiv.org/pdf/2305.13417.pdf. This score quantifies the overlap between
+    the top-k elements of each tensor.
+
+    Parameters:
+        prob_tensor_a (torch.Tensor): The first 1D probability tensor.
+        prob_tensor_b (torch.Tensor): The second 1D probability tensor.
+        k (int): The number of top elements to consider for the intersection score.
+
+    Returns:
+        float: The top-k intersection score between the two tensors.
+
+    Raises:
+        AssertionError: If either of the input tensors is not 1D or if their lengths differ.
+    """
+
+    assert all(
+        (
+            len(prob_tensor_a.shape) == 1,
+            len(prob_tensor_b.shape) == 1,
+            prob_tensor_a.shape == prob_tensor_b.shape,
+        )
+    )
+
+    topk_a = torch.topk(prob_tensor_a, k).indices.tolist()
+    topk_b = torch.topk(prob_tensor_b, k).indices.tolist()
+    intersection = set(topk_a).intersection(set(topk_b))
+
+    return len(intersection) / k
+
+
+def get_top_k_intersection_scores(probabilities_tensor: torch.Tensor, k: int) -> torch.Tensor:
+    """
+    Calculates the top-k intersection scores for a given probabilities tensor across all layers.
+
+    This function computes the intersection scores between the top-k probabilities of each word
+    in each layer against the top-k probabilities of the same word in the final layer. The result
+    is a tensor indicating the degree of overlap (intersection score) between the top-k probabilities
+    across layers for each word.
+
+    Parameters:
+        probabilities_tensor (torch.Tensor): A tensor of shape [layer, word, probabilities]
+            representing the probability distributions for each word across different layers.
+        k (int): The number of top elements to consider for computing the intersection scores.
+
+    Returns:
+        torch.Tensor: A tensor of shape [layer, word, 1] containing the intersection scores
+            for each word across all layers. Each score reflects the overlap between the top-k
+            probabilities of a word in a given layer with those in the final layer.
+
+    The function iterates through each layer and word, computing the intersection score based on
+    the methodology defined in a referenced paper or concept (assumed but not provided in the original docstring).
+    """
+
+    num_layers = probabilities_tensor.shape[0]
+    num_words = probabilities_tensor.shape[1]
+
+    final_layer_probabilities = probabilities_tensor[-1, :, :]
+
+    intersection_scores_tensor = torch.zeros((num_layers, num_words)).unsqueeze(-1)
+
+    for layer in range(num_layers):
+        for word_index in range(num_words):
+            layer_word_probabilities = probabilities_tensor[layer, word_index, :]
+            final_word_probabilities = final_layer_probabilities[word_index, :]
+
+            intersection_scores_tensor[layer, word_index] = top_k_intersection_score(
+                layer_word_probabilities, final_word_probabilities, k
+            )
+
+    return intersection_scores_tensor
+
+
 class ModelWrapper:
     def __init__(
         self, model_name: str, device_type: str | torch.device = "cpu", compiled: bool = False

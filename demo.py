@@ -11,7 +11,7 @@ from streamlit_extras.word_importances import format_word_importances
 
 from demo_tokenizers import display_words_as_dataframe, show_page_tokenizer
 from revllm.helpers import make_word_cloud, reformat_lines
-from revllm.model_wrapper import ModelWrapper
+from revllm.model_wrapper import ModelWrapper, get_top_k_intersection_scores
 from revllm.prompts import get_daily_prompts
 
 APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
@@ -311,7 +311,7 @@ def show_page_generate(wrapper: ModelWrapper):
     st.code(generated_text, language="text")
 
 
-def show_page_logit_lens(wrapper: ModelWrapper):
+def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     st.header("Logit Lens")
     prompt = get_prompt("The capital of Japan is the city of ")
 
@@ -329,7 +329,7 @@ def show_page_logit_lens(wrapper: ModelWrapper):
     )
     df = logit_lens_data.hidden_state_most_likely_token_df
     max_logits_df = pd.DataFrame(logit_lens_data.hidden_state_max_logits, columns=df.columns)
-    descriptive_index = [f"h_{i}_out" for i in df.index]
+    descriptive_index = [f"h_{i}_out" if len(str(i)) > 1 else f"h_0{i}_out" for i in df.index]
     df.index = descriptive_index
     max_logits_df.index = descriptive_index
     st.caption("Tokens")
@@ -337,6 +337,22 @@ def show_page_logit_lens(wrapper: ModelWrapper):
 
     st.caption("Logits")
     st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.caption(f"Top {k} intersection scores")
+    top_k_intersection_scores = get_top_k_intersection_scores(
+        probabilities_tensor=logit_lens_data.hidden_state_probabilities, k=k
+    )
+    top_k_intersection_scores_df = df.copy()
+    top_k_intersection_scores_df.index = descriptive_index
+
+    for column_num in range(len(top_k_intersection_scores_df.columns)):
+        top_k_intersection_scores_df[
+            top_k_intersection_scores_df.columns[column_num]
+        ] = top_k_intersection_scores[:, column_num, 0]
+    st.dataframe(top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.caption(f"Top {k} intersection scores as a line chart")
+    st.line_chart(top_k_intersection_scores_df)
 
     st.subheader("Word clouds from token logits")
     all_tokens = wrapper.tokenizer.get_all_tokens()
