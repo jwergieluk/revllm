@@ -1,3 +1,8 @@
+---
+title: "RevLLM"
+lang: 'en-US'
+---
+
 ## Introduction
 
 RevLLM is a Python library designed to facilitate the analysis of Transformer
@@ -9,25 +14,27 @@ RevLLM stands as a robust and user-friendly tool in the field of natural
 language processing.
 
 
-## Our model: NanoGPT 
+## Our model: nanoGPT 
 
-We construct a model NanoGPT, following the example given by Andrej Karpathy [(Github)](https://github.com/karpathy/nanoGPT).
+We construct a model nanoGPT, following the example given by Andrej Karpathy [(Github)](https://github.com/karpathy/nanoGPT).
 
-- NanoGPT comes in 4 sizes: regular, medium, large, and extra large. 
+- nanoGPT comes in 4 sizes: _regular_, _medium_, _large_, and _extra large_. 
 - All 4 sizes have the same architecture, but differ in weights and dimensions.
-- Like all llms, NanoGPT is a variant of the transformer model introduced in [2017](https://arxiv.org/pdf/1706.03762.pdf).
-- NanoGPT has the same architecture and weights as [gpt2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf), which is trained on a dataset of 8 million web pages. The out-of-the-box model can be imported from [Hugging Face](https://huggingface.co/docs/transformers/model_doc/gpt2).
+- Like most LLMs, nanoGPT is a variant of the transformer model introduced in [2017](https://arxiv.org/pdf/1706.03762.pdf).
+- nanoGPT has the same architecture and weights as [gpt2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf), which is trained on a dataset of 8 million web pages. 
+  The out-of-the-box model can be imported from [Hugging Face](https://huggingface.co/docs/transformers/model_doc/gpt2).
 
 ### Architecture 
 
-Differences between NanoGPT versions lie in the numbers of layers, embedding dimensions, and weights of individual components (see the "architecture" tab under the individual models).  However, their architectures are identical. This section describes the models with dimensions excluded. We assume the reader is familiar with basics of a neural network such as linear, activation, and dropout layers, hence they are listed without comment.  
+Differences between nanoGPT versions lie in the numbers of layers, embedding dimensions, and weights of individual components (see the "architecture" tab under the individual models).  However, their architectures are identical. This section describes the models with dimensions excluded. We assume the reader is familiar with basics of a neural network such as linear, activation, and dropout layers, hence they are listed without comment.  
 
-For what follows: 
+For what follows:
+
 - Let context be a string with length $c$.
-- Let $n$ be the embedding dimension for choice of model size. </br>
+- Let $n$ be the embedding dimension for choice of model size.
 - A tensor is a generalization of a vector.  Our model employs pytorch tensors.
 - Any discussion of batching or batching dimension is excluded.
-- Several steps described include matrix mulitplications with learnable weights. We describe the functionality omitting such details. Exceptions are found under the "Transformer-Specific Details." 
+- Several steps described include matrix multiplications with learnable weights. We describe the functionality omitting such details. Exceptions are found under the "Transformer-Specific Details." 
 - Dropout layers are included, but are ignored during model inference.
 - Layers will follow the format: 
   - <u>Layer description</u> `(layer_name)`, for elements of the architecture
@@ -44,13 +51,14 @@ For what follows:
 - <u>Token embedding</u> `(wte)`: Each input_id in input_ids is mapped to a tensor in $\mathbb{R}^n$.
   - Note: the path $(x' + \alpha (x - x'))$ for integrated gradients below is in this embedding space.
   - For some comments about the matrix $M$ in the embedding layer, see the weight tying section.
-- <u>Position embedding</u> `(wpe)`: Each position_id in position_ids is embedded into a tensor in $\mathbb{R}^n$.
+- <u>Position embedding</u> `(wpe)`: Each position_id in position_ids is mapped to a tensor in $\mathbb{R}^n$.
 - <u>[Additive step]</u>: x = token_embedding + position_embedding
 - <u>Dropout</u> `(drop)`
 
 #### Transformer Block
 
-The number of repetitions of the transformer block architecture is dependent on NanoGPT size.
+The number of repetitions of the transformer block is dependent on nanoGPT size.
+
   - <u>Layer Norm</u> `(ln_1)`
   - <u>Self-Attention</u> `(attn)`:
     - <u>Attention Initialization Layer</u> `(c_attn)` 
@@ -71,6 +79,7 @@ The number of repetitions of the transformer block architecture is dependent on 
   - <u>[Additive Step]</u>: x = x + MLP(x)
 
 #### Layer Norm
+
 - <u>Layer Norm</u> `(ln_f)`
 
 #### Language Model Head
@@ -88,7 +97,7 @@ Upon the output of the `(lm_head)` layer, we are given the raw $c \times 50257$ 
 
 #### Self-Attention
 
-We include a brief description of self attention as it functions in our model.  For a full description, see the foundational [2017 paper](https://arxiv.org/pdf/1706.03762.pdf).
+We include a brief description of self-attention as it functions in our model.  For a full description, see the foundational [2017 paper](https://arxiv.org/pdf/1706.03762.pdf).
 
 ##### Single Headed Attention
 
@@ -100,18 +109,18 @@ S_{i,j} :=
 -\infty & \text{if }  i < j\\ \\
 \left(\frac{QK^T}{\sqrt{n}}\right)_{i,j} & \text{otherwise}
 \end{cases}
-
 $$
 
 The final output of the self attention layer is: x = $(AV)W^O$.
 
 Upon application of softmax:
-  - <u>$A$ is Lower-Triangular</u>, since arbitrarily large negative values of $S$ are a masking condition, as they map arbitrarily close to $0$.  The entry $a_{i,j}$ numerically represents a relationship or 'attention' the model pays from token $i$ to token $j$.  When predicting a next token, the model can only attend to previously seen elements and not to future ones, hence they are nonzero only when $i \geq j$.
-  - <u>The rows of $A$ are probability vectors</u>: The multiplication $AV$ therefore yields a weighted sum of the values in $V$ for each token. The current attention focus can be thought of as being distributed across the input context.
+
+- <u>$A$ is Lower-Triangular</u>, since arbitrarily large negative values of $S$ are a masking condition, as they map arbitrarily close to $0$.  The entry $a_{i,j}$ numerically represents a relationship or 'attention' the model pays from token $i$ to token $j$.  When predicting a next token, the model can only attend to previously seen elements and not to future ones, hence they are nonzero only when $i \geq j$.
+- <u>The rows of $A$ are probability vectors</u>: The multiplication $AV$ therefore yields a weighted sum of the values in $V$ for each token. The current attention focus can be thought of as being distributed across the input context.
 
 Additional notes (for further explanation, see the 2017 paper linked above):
 
-- With this lower triangularity, NanoGPT is a "decoder-only" model, to be distinguished from models which contain an encoder block.
+- With this lower triangularity, nanoGPT is a "decoder-only" model, to be distinguished from models which contain an encoder block.
 - The scaling factor $\frac{1}{\sqrt{n}}$ is an important performance-improvement feature for softmax use (here we omit details).
 - In general, instead of the term $\sqrt{n}$, transformer architectures typically discuss $\sqrt{d_k}$.  It is not a requirement that the $Q, K, V$ matrices have a dimension equal to the embedding dimension.  But for our model, they will.
 - In general transformers, $V$ may not have identical dimensions to $Q$ and $K$.
@@ -122,7 +131,7 @@ Additional notes (for further explanation, see the 2017 paper linked above):
 In reality, for transformer models the self-attention mechanism subdivides the embedding space into $H > 1$ distinct subspaces called "heads." The `(c_attn)` layer has matrices $W_h^Q, W_h^K, W_h^V,$ and also contains the full-dimensional output matrix $W^O$. Through the first three, x maps to matrices $Q_h,K_h,V_h \in \mathbb{R}^{c \times n_h}$, for $1 \leq h \leq H$, where $n = \sum_h n_h$.
 
 
-In each size of our NanoGPT, $H$ divides $n$.  For every $h$, $n_h = \frac{n}{H}$, and $A_h = \text{softmax}(S_h) \in \mathbb{R}^{c \times c}$, where: 
+In each size of our nanoGPT, $H$ divides $n$.  For every $h$, $n_h = \frac{n}{H}$, and $A_h = \text{softmax}(S_h) \in \mathbb{R}^{c \times c}$, where: 
 
 $$
 \big(S_h\big)_{i,j} := 
@@ -217,7 +226,7 @@ Where the number of steps by default is $m=50$.
 
 Recall from above that the term "logits" is commonly used to describe the final raw output of the model, before any softmax transformation and subsequent translation to natural language. 
 
- Internal to the model, each pass through NanoGPT's transformer block maps a $c \times n$ embedding tensor to another $c \times n$ tensor.  We include an implementation of [logit lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), a tool which transforms these embeddings into logits:
+ Internal to the model, each pass through nanoGPT's transformer block maps a $c \times n$ embedding tensor to another $c \times n$ tensor.  We include an implementation of [logit lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), a tool which transforms these embeddings into logits:
 
 
 - After each block, we extract the embeddings and run them through the final layers of the model (ln_f, lm_head), giving us logits at each layer. 
@@ -227,13 +236,13 @@ Recall from above that the term "logits" is commonly used to describe the final 
 
 ### Note About Sub-Token Predictiton
 
-The visual display of logit lens contains a prediction along with every word of the context.  Due to the sequential nature of how models like NanoGPT work, predictions are generated for every sub-context which starts from the first word.  The final model prediction is the last of all such predictions.  As the logit lens display shows its evolution, it does so for each of these sub-token predictions as well.
+The visual display of logit lens contains a prediction along with every word of the context.  Due to the sequential nature of how models like nanoGPT work, predictions are generated for every sub-context which starts from the first word.  The final model prediction is the last of all such predictions.  As the logit lens display shows its evolution, it does so for each of these sub-token predictions as well.
 
 # References
 
-- Garbin, C. (n.d.). A gentle introduction to the concepts of machine learning interpretability, feature attribution, and SHAP. Retrieved from https://cgarbin.github.io/machine-learning-interpretability-feature-attribution
+- Garbin, C. (n.d.). A gentle introduction to the concepts of machine learning interpretability, feature attribution, and SHAP. Retrieved from (https://cgarbin.github.io/machine-learning-interpretability-feature-attribution)
 
-- Karpathy, A. nanoGPT [Software]. GitHub. https://github.com/karpathy/nanoGPT
+- Karpathy, A. nanoGPT [Software]. GitHub. (https://github.com/karpathy/nanoGPT)
 
 - Krishna, Satyapriya, Tessa Han, Alex Gu, Javin Pombra, Shahin Jabbari, Steven Wu and Himabindu Lakkaraju. “The Disagreement Problem in Explainable Machine Learning: A Practitioner's Perspective.” ArXiv abs/2202.01602 (2022)
 
@@ -245,4 +254,4 @@ The visual display of logit lens contains a prediction along with every word of 
 
 - Vaswani, Ashish, Noam M. Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin. “Attention is All you Need.” Neural Information Processing Systems (2017).
 
-- Logit lens: https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens
+- nostalgebraist. 2020. interpreting gpt: the logit lens. (https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens)
