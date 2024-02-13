@@ -56,15 +56,15 @@ def display_markdown_file(md_file_name: str) -> None:
     if md_file.startswith("---"):
         lines = []
         yaml_block_delimiter_count = 0
-        for line in md_file.split('\n'):
-            if line.startswith('---'):
+        for line in md_file.split("\n"):
+            if line.startswith("---"):
                 yaml_block_delimiter_count += 1
                 if yaml_block_delimiter_count <= 2:
                     continue
             if yaml_block_delimiter_count < 2:
                 continue
             lines.append(line)
-        md_file = '\n'.join(lines)
+        md_file = "\n".join(lines)
 
     st.markdown(md_file, unsafe_allow_html=True)
 

@@ -133,8 +133,9 @@ The app should now be running on `http://localhost:8608/`.
 
 ## License
 
-RevLLM is released under the MIT License.
+_RevLLM_ is released under the MIT License.
 
 ## Acknowledgements
 
-Special thanks to Andrej Karpathy and contributors to the nanoGPT project for their foundational work in the field.
+Special thanks to Andrej Karpathy and contributors to the [nanoGPT](https://github.com/karpathy/nanoGPT)project 
+for their foundational work in the field.
