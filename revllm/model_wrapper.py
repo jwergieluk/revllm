@@ -97,20 +97,7 @@ def top_k_intersection_score(
     """
     Calculates the top-k intersection score between two 1D probability tensors.
 
-    The intersection score is based on the methodology defined in the paper:
-    https://arxiv.org/pdf/2305.13417.pdf. This score quantifies the overlap between
-    the top-k elements of each tensor.
-
-    Parameters:
-        prob_tensor_a (torch.Tensor): The first 1D probability tensor.
-        prob_tensor_b (torch.Tensor): The second 1D probability tensor.
-        k (int): The number of top elements to consider for the intersection score.
-
-    Returns:
-        float: The top-k intersection score between the two tensors.
-
-    Raises:
-        AssertionError: If either of the input tensors is not 1D or if their lengths differ.
+    The intersection score is defined in: https://arxiv.org/pdf/2305.13417.pdf.
     """
 
     assert all(
@@ -130,25 +117,8 @@ def top_k_intersection_score(
 
 def get_top_k_intersection_scores(probabilities_tensor: torch.Tensor, k: int) -> torch.Tensor:
     """
-    Calculates the top-k intersection scores for a given probabilities tensor across all layers.
-
-    This function computes the intersection scores between the top-k probabilities of each word
-    in each layer against the top-k probabilities of the same word in the final layer. The result
-    is a tensor indicating the degree of overlap (intersection score) between the top-k probabilities
-    across layers for each word.
-
-    Parameters:
-        probabilities_tensor (torch.Tensor): A tensor of shape [layer, word, probabilities]
-            representing the probability distributions for each word across different layers.
-        k (int): The number of top elements to consider for computing the intersection scores.
-
-    Returns:
-        torch.Tensor: A tensor of shape [layer, word, 1] containing the intersection scores
-            for each word across all layers. Each score reflects the overlap between the top-k
-            probabilities of a word in a given layer with those in the final layer.
-
-    The function iterates through each layer and word, computing the intersection score based on
-    the methodology defined in a referenced paper or concept (assumed but not provided in the original docstring).
+    Calculates the top-k intersection scores between the probabilities of each word
+    in each layer against the probabilities of the same word in the final layer.
     """
 
     num_layers = probabilities_tensor.shape[0]
@@ -168,6 +138,46 @@ def get_top_k_intersection_scores(probabilities_tensor: torch.Tensor, k: int) ->
             )
 
     return intersection_scores_tensor
+
+
+def rank_index(t: torch.Tensor, index_of_interest: int) -> int:
+    """
+    Calculate the rank of a specified index within a 1-dimensional tensor.
+    """
+
+    assert len(t.shape) == 1
+    ordered_indices = torch.argsort(t, descending=True)
+    rank = ordered_indices.tolist().index(index_of_interest) + 1
+
+    return rank
+
+
+def get_final_predictions_ranks(probabilities_tensor: torch.Tensor) -> torch.Tensor:
+    """
+    For each sub-context, extracts final layer predicted token, then calculates that token's prediction
+    rank at each layer for that sub-context.
+    """
+    assert len(probabilities_tensor.shape) == 3
+
+    num_layers = probabilities_tensor.shape[0]
+    num_tokens = probabilities_tensor.shape[1]
+    final_sub_context_predictions = torch.argmax(
+        probabilities_tensor[-1, :, :], dim=-1
+    )  # [num_tokens]
+    ranks_tensor = torch.zeros(num_layers, num_tokens, dtype=torch.int32).unsqueeze(
+        -1
+    )  # [num_layers, num_tokens, 1]
+
+    for token_index in range(num_tokens):
+        final_sub_token_prediction = final_sub_context_predictions[token_index]
+        for layer_index in range(num_layers):
+            current_probabilities = probabilities_tensor[layer_index, token_index, :]
+            final_token_prediction_local_rank = rank_index(
+                current_probabilities, final_sub_token_prediction
+            )
+            ranks_tensor[layer_index, token_index, 0] = final_token_prediction_local_rank
+
+    return ranks_tensor
 
 
 class ModelWrapper:

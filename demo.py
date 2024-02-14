@@ -11,7 +11,11 @@ from streamlit_extras.word_importances import format_word_importances
 
 from demo_tokenizers import display_words_as_dataframe, show_page_tokenizer
 from revllm.helpers import make_word_cloud, reformat_lines
-from revllm.model_wrapper import ModelWrapper, get_top_k_intersection_scores
+from revllm.model_wrapper import (
+    ModelWrapper,
+    get_final_predictions_ranks,
+    get_top_k_intersection_scores,
+)
 from revllm.prompts import get_daily_prompts
 
 APP_TITLE = "RevLLM: Reverse Engineering Tools for Language Models"
@@ -342,17 +346,30 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     top_k_intersection_scores = get_top_k_intersection_scores(
         probabilities_tensor=logit_lens_data.hidden_state_probabilities, k=k
     )
-    top_k_intersection_scores_df = df.copy()
-    top_k_intersection_scores_df.index = descriptive_index
-
-    for column_num in range(len(top_k_intersection_scores_df.columns)):
-        top_k_intersection_scores_df[
-            top_k_intersection_scores_df.columns[column_num]
-        ] = top_k_intersection_scores[:, column_num, 0]
+    top_k_intersection_scores_df = pd.DataFrame(
+        data=top_k_intersection_scores.squeeze(-1), columns=df.columns, index=df.index
+    )
     st.dataframe(top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None))
 
     st.caption(f"Top {k} intersection scores as a line chart")
     st.line_chart(top_k_intersection_scores_df)
+
+    st.caption("Final prediction ranks")
+    final_prediction_ranks = get_final_predictions_ranks(
+        probabilities_tensor=logit_lens_data.hidden_state_probabilities
+    )
+    final_prediction_ranks_df = pd.DataFrame(
+        data=final_prediction_ranks.squeeze(-1), columns=df.columns, index=df.index
+    )
+    st.dataframe(final_prediction_ranks_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.write(
+        "Final prediction for each sub-prompt refers to the predicted token at the final layer. "
+        "At each layer, we see this prediction's rank among all tokens."
+    )
+
+    st.caption("Final prediction ranks as a line chart")
+    st.line_chart(final_prediction_ranks_df)
 
     st.subheader("Word clouds from token logits")
     all_tokens = wrapper.tokenizer.get_all_tokens()
