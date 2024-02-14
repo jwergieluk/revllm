@@ -24,31 +24,31 @@ Feature rundown:
 
 ### Tokenizer Analysis
 
-![tokenizer-analysis.png](docs/tokenizer-analysis.png)
+![](docs/tokenizer-analysis.png)
 
 ### Embedding Matrix Statistics and Visualization
 
-![embedding-matrix-insights.png](docs/embedding-matrix-insights.png)
+![](docs/embedding-matrix-insights.png)
 
 ### Generation with Top-k Sampling and Temperature
 
-![prompt-completition.png](docs/prompt-completition.png)
+![](docs/prompt-completition.png)
 
 ### Prompt Importance Analysis
 
-![prompt-importance-analysis.png](docs/prompt-importance-analysis.png)
+![](docs/prompt-importance-analysis.png)
 
 ### Logit Lens
 
-![logit-lens-1.png](docs/logit-lens-1.png)
+![](docs/logit-lens-1.png)
 
-![logit-lens-2.png](docs/logit-lens-2.png)
+![](docs/logit-lens-2.png)
 
-![logit-lens-3.png](docs/logit-lens-3.png)
+![](docs/logit-lens-3.png)
 
 ## Automatic Installation
 
-To install RevLLM, simply run the following command in your Python environment:
+To install RevLLM, simply clone this repository and run the following command:
 
 ```bash
 ./make_mamba_env.sh
