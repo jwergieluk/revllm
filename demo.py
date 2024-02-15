@@ -337,7 +337,22 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     df.index = descriptive_index
     max_logits_df.index = descriptive_index
     st.caption("Tokens")
+
     st.dataframe(df.style.background_gradient(cmap="Blues", axis=None, gmap=max_logits_df))
+
+    random_token = np.random.choice(df.columns[1:])
+    random_token_index = list(df.columns).index(random_token)
+    random_sub_prompt = df.columns[: random_token_index + 1].tolist()
+    random_sub_prompt = [token[token.index("_") + 1 :] for token in random_sub_prompt]
+    random_sub_prompt = "".join(random_sub_prompt)
+    random_df_index = np.random.choice(df.index)
+    st.write(
+        "At each token, the model predicts the next token after the sub-prompt up to it. "
+        "For example:"
+    )
+    st.write(f"Random token: {random_token}")
+    st.write(f"Sub-prompt: {random_sub_prompt}")
+    st.write(f"Predicted token at layer {random_df_index}: {df.loc[random_df_index, random_token]}")
 
     st.caption("Logits")
     st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
@@ -350,6 +365,12 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
         data=top_k_intersection_scores.squeeze(-1), columns=df.columns, index=df.index
     )
     st.dataframe(top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.write(
+        "At each layer, the [intersection score](https://arxiv.org/pdf/2305.13417.pdf) measures "
+        "the degree to which much the top k predicted tokens overlap with final predictions. "
+        "0 = no overlap and 1 = full overlap."
+    )
 
     st.caption(f"Top {k} intersection scores as a line chart")
     st.line_chart(top_k_intersection_scores_df)
@@ -372,6 +393,11 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     st.line_chart(final_prediction_ranks_df)
 
     st.subheader("Word clouds from token logits")
+    st.write(
+        "At each layer, we include a word cloud for the full prompt's top 20 predicted "
+        "tokens, with a probabilities histogram included."
+    )
+
     all_tokens = wrapper.tokenizer.get_all_tokens()
     for i, layer in enumerate(descriptive_index):
         st.write(f"Layer **{layer}**")

@@ -236,7 +236,7 @@ Recall from above that the term "logits" is commonly used to describe the final 
 - This window gives an insight as to what the model believes after each block, and how it evolves.
 - In contrast to other model internals such as the attention mechanism, this window indicates what the model believes at a step, not how.  However, viewing how the model updates its understanding over time can give a good insight to its functionality.
 
-### Note About Sub-Token Predictiton
+### Sub-Token Predictiton
 
 The visual display of logit lens contains a prediction along with every word of the context.  Due to the sequential nature of how models like nanoGPT work, predictions are generated for every sub-context which starts from the first word.  The final model prediction is the last of all such predictions.  As the logit lens display shows its evolution, it does so for each of these sub-token predictions as well.
 
