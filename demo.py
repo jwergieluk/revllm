@@ -295,6 +295,8 @@ def show_page_generate(wrapper: ModelWrapper):
 
     prompt = get_prompt()
     temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
+    st.write("Lower temperatures make the model more deterministic.  Higher temperatures increase "
+             "variability.")
     checkbox_reformat_output = st.checkbox("Reformat output", value=True)
     max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=35)
 
@@ -317,6 +319,10 @@ def show_page_generate(wrapper: ModelWrapper):
 
 def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     st.header("Logit Lens")
+    st.write("Employing "
+             "[logits lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), "
+             "we are able to visualize the model's state at every hidden layer h.")
+    st.header("Choose a prompt")
     prompt = get_prompt("The capital of Japan is the city of ")
 
     if not prompt:
@@ -340,15 +346,20 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
 
     st.dataframe(df.style.background_gradient(cmap="Blues", axis=None, gmap=max_logits_df))
 
-    random_token = np.random.choice(df.columns[1:])
+    if len(df.columns) > 1:
+        random_token = np.random.choice(df.columns[1:])
+    else:
+        random_token = df.columns[0]
     random_token_index = list(df.columns).index(random_token)
     random_sub_prompt = df.columns[: random_token_index + 1].tolist()
     random_sub_prompt = [token[token.index("_") + 1 :] for token in random_sub_prompt]
     random_sub_prompt = "".join(random_sub_prompt)
     random_df_index = np.random.choice(df.index)
     st.write(
-        "At each token, the model predicts the next token after the sub-prompt up to it. "
-        "For example:"
+        "At each token, the model considers the sub-prompt up to it. "
+        "It generates next-token prediction for this sub-prompt. The final output token is "
+        "simply the last of these predictions. All dataframes on this page are populated "
+        "according to this fact.  \n\nFor example:"
     )
     st.write(f"Random token: {random_token}")
     st.write(f"Sub-prompt: {random_sub_prompt}")
@@ -356,7 +367,10 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
 
     st.caption("Logits")
     st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
-
+    st.write(
+        "Logits at each layer refer to the raw output of the model before conversion to probability "
+        "scores. Here we include the maximum logit value at each layer."
+    )
     st.caption(f"Top {k} intersection scores")
     top_k_intersection_scores = get_top_k_intersection_scores(
         probabilities_tensor=logit_lens_data.hidden_state_probabilities, k=k
@@ -367,9 +381,11 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     st.dataframe(top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None))
 
     st.write(
-        "At each layer, the [intersection score](https://arxiv.org/pdf/2305.13417.pdf) measures "
-        "the degree to which much the top k predicted tokens overlap with final predictions. "
-        "0 = no overlap and 1 = full overlap."
+        "The [top k intersection score](https://arxiv.org/pdf/2305.13417.pdf) of two probability "
+        "tensors measures the degree to which their top k predicted indices overlap (0 = no overlap, "
+        "1 = full overlap). Here, at every layer we compare its ouptut probability tensor with "
+        "the final layer's output probability tensor."
+        ""
     )
 
     st.caption(f"Top {k} intersection scores as a line chart")
@@ -385,8 +401,9 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     st.dataframe(final_prediction_ranks_df.style.background_gradient(cmap="Blues", axis=None))
 
     st.write(
-        "Final prediction for each sub-prompt refers to the predicted token at the final layer. "
-        "At each layer, we see this prediction's rank among all tokens."
+        "The final prediction for each sub-prompt refers to the predicted (top ranked) token at the "
+        "final layer (the bottom row of the first dataframe above). Here, at each layer, we view the "
+        "final prediction's rank among all tokens."
     )
 
     st.caption("Final prediction ranks as a line chart")
