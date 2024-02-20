@@ -362,9 +362,9 @@ class ModelWrapper:
                 )  # [n_steps, context_length, embedding_dimension]
 
                 for block in self.model.transformer.h:
-                    forward_embeddings = block(
-                        forward_embeddings
-                    )  # [n_steps, context_length, embedding_dimension]
+                    forward_embeddings = block(forward_embeddings)[
+                        0
+                    ]  # [n_steps, context_length, embedding_dimension]
 
                 forward_embeddings = self.model.transformer.ln_f(
                     forward_embeddings
@@ -478,9 +478,9 @@ class ModelWrapper:
             )  # [n_steps, context_length, embedding_dimension]
 
             for block in self.model.transformer.h:
-                forward_embeddings = block(
-                    forward_embeddings
-                )  # [n_steps, context_length, embedding_dimension]
+                forward_embeddings = block(forward_embeddings)[
+                    0
+                ]  # [n_steps, context_length, embedding_dimension]
 
             forward_embeddings = self.model.transformer.ln_f(
                 forward_embeddings

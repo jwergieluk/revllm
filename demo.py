@@ -1,6 +1,7 @@
 import os
 from operator import itemgetter
 
+import altair as alt
 import numpy as np
 import pandas as pd
 import psutil
@@ -30,6 +31,7 @@ PAGE_PROMPT_IMPORTANCE = "Prompt Importance"
 PAGE_LOGIT_LENS = "Logit Lens"
 PAGE_CIRCUIT_DISCOVERY = "Circuit Discovery"
 PAGE_GENERATE = "Generate"
+PAGE_ATTENTIONS = "Multi-Head Self-Attention"
 ALL_PAGES = (
     PAGE_DOCS,
     PAGE_MODEL_ARCHITECTURE,
@@ -38,6 +40,7 @@ ALL_PAGES = (
     PAGE_GENERATE,
     PAGE_PROMPT_IMPORTANCE,
     PAGE_LOGIT_LENS,
+    PAGE_ATTENTIONS,
     # PAGE_CIRCUIT_DISCOVERY,
 )
 
@@ -152,6 +155,8 @@ def main():
         show_page_logit_lens(model_wrapper)
     if selected_page == PAGE_GENERATE:
         show_page_generate(model_wrapper)
+    if selected_page == PAGE_ATTENTIONS:
+        show_page_attentions(model_wrapper)
 
 
 def show_page_model_architecture(wrapper: ModelWrapper):
@@ -487,6 +492,80 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
         if checkbox_show_scores:
             st.caption("Full importance score data")
             st.dataframe(score.get_input_score_df())
+
+
+def show_page_attentions(wrapper: ModelWrapper):
+    st.header(PAGE_ATTENTIONS)
+    prompt = get_prompt("The capital of Japan is the city of ")
+
+    if not prompt:
+        return
+
+    button_generate = st.button("Generate")
+    if not button_generate:
+        return
+
+    input_ids = wrapper.tokenizer.encode(prompt)
+    input_tokens = input_ids[0].tolist()
+    tokens_list = [wrapper.tokenizer.decode([input_token]) for input_token in input_tokens]
+    outputs = wrapper.model.forward_with_diagnostics(input_ids)
+    attentions = outputs.attentions
+
+    num_layers = len(attentions)
+    num_heads = attentions[0].shape[1]
+
+    indexed_tokens_list = [
+        "0" + str(index) + "_" + token if len(str(index)) == 1 else str(index) + "_" + token
+        for index, token in enumerate(tokens_list)
+    ]
+    st.write(f"Input tokens: {indexed_tokens_list}")
+    for layer in list(range(num_layers)):
+        st.markdown(
+            f"<h3 style='text-align: center; text-decoration: underline;'><b>Layer {layer + 1}</b></h3>",
+            unsafe_allow_html=True,
+        )
+        charts = []
+        for head in list(range(num_heads)):
+            attention_df = pd.DataFrame(
+                data=attentions[layer][0, head, :, :],
+                columns=indexed_tokens_list,
+                index=indexed_tokens_list,
+            )
+
+            attention_df_long = attention_df.reset_index().melt(
+                id_vars=["index"], var_name="target", value_name="attn"
+            )
+
+            color_scale = alt.Scale(
+                domain=[0, attention_df_long["attn"].max()],
+                range=["white", "#dceefb", "#99ccf0", "#5599e2", "#2a7bce", "#005bb5"],
+            )
+
+            # Now use attention_df_long for the Altair chart
+            attention_chart = (
+                alt.Chart(attention_df_long)
+                .mark_rect()
+                .encode(
+                    x=alt.X("target:O", title="", axis=None),
+                    y=alt.Y("index:O", title="", axis=None),
+                    color=alt.Color(
+                        "attn:Q",
+                        scale=color_scale,  # lt.Scale(domain=[0, attention_df_long['attn'].max()], range=['white', "blue"])
+                        legend=None,
+                    ),
+                )
+            )
+            attention_chart_with_title = attention_chart.properties(title=f"Head {head + 1}")
+            charts.append(attention_chart_with_title)
+
+            # st.altair_chart(attention_chart, use_container_width=True)
+        rows = [
+            alt.hconcat(*charts[i : i + 4]) for i in range(0, len(charts), 4)
+        ]  # Create rows of up to 4 charts
+        grid = alt.vconcat(*rows)  # Concatenate rows vertically
+
+        st.altair_chart(grid, use_container_width=True)
+        st.write("")
 
 
 if __name__ == "__main__":

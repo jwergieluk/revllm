@@ -38,6 +38,7 @@ class GPTConfig:
 class GPTOutput:
     logits: torch.Tensor
     hidden_state_logits: list[torch.Tensor]
+    attentions: list[torch.Tensor]
     loss: float | None = None
 
 
@@ -78,8 +79,18 @@ class CausalSelfAttention(nn.Module):
                     1, 1, config.block_size, config.block_size
                 ),
             )
+        # This is probably unadviseable, but I need the bias to get the attention matrix
+        # for the diagnostics
+        else:
+            self.register_buffer(
+                "bias",
+                torch.tril(torch.ones(config.block_size, config.block_size)).view(
+                    1, 1, config.block_size, config.block_size
+                ),
+            )
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor, output_attentions=False):
+        attention_matrix = None
         B, T, C = x.size()  # batch size, sequence length, embedding dimensionality (n_embd)
 
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
@@ -89,7 +100,18 @@ class CausalSelfAttention(nn.Module):
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2)  # (B, nh, T, hs)
 
         # causal self-attention; Self-attend: (B, nh, T, hs) x (B, nh, hs, T) -> (B, nh, T, T)
-        if self.flash:
+
+        if not self.flash or output_attentions:
+            # manual implementation of attention
+            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
+            att = F.softmax(att, dim=-1)
+            att = self.attn_dropout(att)
+            with torch.no_grad():
+                attention_matrix = att.clone()
+            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+
+        else:
             # efficient attention using Flash Attention CUDA kernels
             y = torch.nn.functional.scaled_dot_product_attention(
                 q,
@@ -99,20 +121,14 @@ class CausalSelfAttention(nn.Module):
                 dropout_p=self.dropout if self.training else 0,
                 is_causal=True,
             )
-        else:
-            # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float("-inf"))
-            att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = (
             y.transpose(1, 2).contiguous().view(B, T, C)
         )  # re-assemble all head outputs side by side
 
         # output projection
         y = self.resid_dropout(self.c_proj(y))
-        return y
+
+        return y, attention_matrix
 
 
 class MLP(nn.Module):
@@ -139,10 +155,15 @@ class Block(nn.Module):
         self.ln_2 = LayerNorm(config.n_embd, bias=config.bias)
         self.mlp = MLP(config)
 
-    def forward(self, x: torch.Tensor):
-        x = x + self.attn(self.ln_1(x))
+    def forward(self, x: torch.Tensor, output_attentions=False):
+        attn_output, attention_matrix = self.attn(self.ln_1(x), output_attentions=output_attentions)
+        x = x + attn_output
         x = x + self.mlp(self.ln_2(x))
-        return x
+
+        # if self.output_attentions:
+        return x, attention_matrix
+        # else:
+        #     return x
 
 
 class GPT(nn.Module):
@@ -192,7 +213,7 @@ class GPT(nn.Module):
         x = self.transformer.drop(x)
 
         for block in self.transformer.h:
-            x = block(x)
+            x = block(x)[0]
         x = self.transformer.ln_f(x)
 
         if targets is None:
@@ -241,6 +262,7 @@ class GPT(nn.Module):
         pos = torch.arange(0, t, dtype=torch.long, device=device)  # shape (t)
 
         hidden_state_logits = []
+        attentions = []
         # forward the GPT model itself
         tok_emb = self.transformer.wte(input_token_ids)  # token embeddings of shape (b, t, n_embd)
         pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
@@ -249,14 +271,15 @@ class GPT(nn.Module):
             logits = self.lm_head(self.transformer.ln_f(x))
             hidden_state_logits.append(logits)
         for block in self.transformer.h:
-            x = block(x)
+            x, attention_matrices = block(x, output_attentions=True)
             with torch.no_grad():
+                attentions.append(attention_matrices)
                 logits = self.lm_head(self.transformer.ln_f(x))
                 hidden_state_logits.append(logits)
         x = self.transformer.ln_f(x)
 
         logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
-        output = GPTOutput(logits, hidden_state_logits)
+        output = GPTOutput(logits, hidden_state_logits, attentions)
         return output
 
     def crop_block_size(self, block_size):
