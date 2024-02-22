@@ -300,8 +300,10 @@ def show_page_generate(wrapper: ModelWrapper):
 
     prompt = get_prompt()
     temperature = st.slider("Temperature", min_value=0.1, max_value=10.0, value=0.9, step=0.1)
-    st.write("Lower temperatures make the model more deterministic.  Higher temperatures increase "
-             "variability.")
+    st.write(
+        "Lower temperatures make the model more deterministic.  Higher temperatures increase "
+        "variability."
+    )
     checkbox_reformat_output = st.checkbox("Reformat output", value=True)
     max_new_tokens = st.number_input("Number of new tokens", min_value=1, max_value=1000, value=35)
 
@@ -324,9 +326,11 @@ def show_page_generate(wrapper: ModelWrapper):
 
 def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     st.header("Logit Lens")
-    st.write("Employing "
-             "[logits lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), "
-             "we are able to visualize the model's state at every hidden layer h.")
+    st.write(
+        "Employing "
+        "[logits lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), "
+        "we are able to visualize the model's state at every hidden layer h."
+    )
     st.header("Choose a prompt")
     prompt = get_prompt("The capital of Japan is the city of ")
 
@@ -471,6 +475,8 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
         scores_generator = wrapper.yield_importance_integrated_gradients(prompt)
     if selected_importance_method == IMPORTANCE_LIME:
         scores_generator = wrapper.yield_importance_lime(prompt)
+    if selected_importance_method == IMPORTANCE_SEQ_INTEGRATED_GRADIENTS:
+        scores_generator = wrapper.yield_importance_sequential_integrated_gradients(prompt)
     if not scores_generator:
         return
 
