@@ -2,6 +2,7 @@ import os
 from operator import itemgetter
 
 import altair as alt
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import psutil
@@ -31,7 +32,8 @@ PAGE_PROMPT_IMPORTANCE = "Prompt Importance"
 PAGE_LOGIT_LENS = "Logit Lens"
 PAGE_CIRCUIT_DISCOVERY = "Circuit Discovery"
 PAGE_GENERATE = "Generate"
-PAGE_ATTENTIONS = "Multi-Head Self-Attention"
+PAGE_ALL_ATTENTIONS = "Multi-Head Self-Attention (All)"
+PAGE_SUMMARY_ATTENTIONS = "Multi-Head Self-Attention (Summary)"
 ALL_PAGES = (
     PAGE_DOCS,
     PAGE_MODEL_ARCHITECTURE,
@@ -40,7 +42,8 @@ ALL_PAGES = (
     PAGE_GENERATE,
     PAGE_PROMPT_IMPORTANCE,
     PAGE_LOGIT_LENS,
-    PAGE_ATTENTIONS,
+    PAGE_ALL_ATTENTIONS,
+    PAGE_SUMMARY_ATTENTIONS,
     # PAGE_CIRCUIT_DISCOVERY,
 )
 
@@ -155,8 +158,10 @@ def main():
         show_page_logit_lens(model_wrapper)
     if selected_page == PAGE_GENERATE:
         show_page_generate(model_wrapper)
-    if selected_page == PAGE_ATTENTIONS:
-        show_page_attentions(model_wrapper)
+    if selected_page == PAGE_ALL_ATTENTIONS:
+        show_page_all_attentions(model_wrapper)
+    if selected_page == PAGE_SUMMARY_ATTENTIONS:
+        show_page_summary_attentions(model_wrapper)
 
 
 def show_page_model_architecture(wrapper: ModelWrapper):
@@ -500,8 +505,8 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
             st.dataframe(score.get_input_score_df())
 
 
-def show_page_attentions(wrapper: ModelWrapper):
-    st.header(PAGE_ATTENTIONS)
+def show_page_all_attentions(wrapper: ModelWrapper):
+    st.header(PAGE_ALL_ATTENTIONS)
     prompt = get_prompt("The capital of Japan is the city of ")
 
     if not prompt:
@@ -512,10 +517,13 @@ def show_page_attentions(wrapper: ModelWrapper):
         return
 
     input_ids = wrapper.tokenizer.encode(prompt)
+    context_length = len(input_ids[0])
     input_tokens = input_ids[0].tolist()
     tokens_list = [wrapper.tokenizer.decode([input_token]) for input_token in input_tokens]
     outputs = wrapper.model.forward_with_diagnostics(input_ids)
-    attentions = outputs.attentions
+    attentions = (
+        outputs.attentions
+    )  # attentions[layer].shape = (1, num_heads, num_tokens, num_tokens)
 
     num_layers = len(attentions)
     num_heads = attentions[0].shape[1]
@@ -524,7 +532,8 @@ def show_page_attentions(wrapper: ModelWrapper):
         "0" + str(index) + "_" + token if len(str(index)) == 1 else str(index) + "_" + token
         for index, token in enumerate(tokens_list)
     ]
-    st.write(f"Input tokens: {indexed_tokens_list}")
+
+    st.header("All Attentions")
     for layer in list(range(num_layers)):
         st.markdown(
             f"<h3 style='text-align: center; text-decoration: underline;'><b>Layer {layer + 1}</b></h3>",
@@ -572,6 +581,93 @@ def show_page_attentions(wrapper: ModelWrapper):
 
         st.altair_chart(grid, use_container_width=True)
         st.write("")
+
+
+def show_page_summary_attentions(wrapper: ModelWrapper):
+    st.header(PAGE_SUMMARY_ATTENTIONS)
+
+    prompt = get_prompt("The capital of Japan is the city of ")
+
+    if not prompt:
+        return
+
+    button_generate = st.button("Generate")
+    if not button_generate:
+        return
+
+    input_ids = wrapper.tokenizer.encode(prompt)
+    context_length = len(input_ids[0])
+    input_tokens = input_ids[0].tolist()
+    tokens_list = [wrapper.tokenizer.decode([input_token]) for input_token in input_tokens]
+    outputs = wrapper.model.forward_with_diagnostics(input_ids)
+    attentions = (
+        outputs.attentions
+    )  # attentions[layer].shape = (1, num_heads, num_tokens, num_tokens)
+
+    num_layers = len(attentions)
+    num_heads = attentions[0].shape[1]
+    stacked_tensors = torch.stack(attentions, dim=0)
+    stacked_tensors = stacked_tensors.squeeze(1)
+    average_attentions = stacked_tensors.mean(dim=(0, 1))
+    max_attentions = torch.amax(stacked_tensors, dim=(0, 1))
+    min_attentions = torch.amin(stacked_tensors, dim=(0, 1))
+    attentions_variance = stacked_tensors.var(dim=(0, 1))
+    attentions_std = stacked_tensors.std(dim=(0, 1))
+
+    indexed_tokens_list = [
+        "0" + str(index) + "_" + token if len(str(index)) == 1 else str(index) + "_" + token
+        for index, token in enumerate(tokens_list)
+    ]
+    st.write(f"Input tokens: {indexed_tokens_list}")
+
+    # fig1, axs1 = plt.subplots(context_length, context_length, figsize=(35, 6 * context_length), squeeze=False,sharey=True, sharex=True)
+    fig, axs = plt.subplots(
+        context_length,
+        context_length,
+        figsize=(35, 6 * context_length),
+        squeeze=False,
+        sharey=True,
+        sharex=True,
+    )
+
+    for row_index in range(context_length):
+        for column_index in range(context_length):
+            st.write()
+            pair_attentions = stacked_tensors[:, :, row_index, column_index]
+            flat_tensor = pair_attentions.flatten().numpy()
+
+            axs[row_index, column_index].boxplot(flat_tensor)
+
+    plt.tight_layout()
+
+    st.header("Summaries Across all Layers and Heads")
+
+    st.write("Boxplots")
+    st.pyplot(fig)
+
+    st.write("Average Attentions")
+    average_attention_df = pd.DataFrame(
+        average_attentions, columns=indexed_tokens_list, index=indexed_tokens_list
+    )
+    st.dataframe(average_attention_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.write("Attentions Variance")
+    attentions_variance_df = pd.DataFrame(
+        attentions_variance, columns=indexed_tokens_list, index=indexed_tokens_list
+    )
+    st.dataframe(attentions_variance_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.write("Max Attentions")
+    max_attention_df = pd.DataFrame(
+        max_attentions, columns=indexed_tokens_list, index=indexed_tokens_list
+    )
+    st.dataframe(max_attention_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.write("Min Attentions")
+    min_attention_df = pd.DataFrame(
+        min_attentions, columns=indexed_tokens_list, index=indexed_tokens_list
+    )
+    st.dataframe(min_attention_df.style.background_gradient(cmap="Blues", axis=None))
 
 
 if __name__ == "__main__":
