@@ -22,9 +22,31 @@ language processing.
 
 Feature rundown:
 
+### Logit Lens
+
+![](docs/logit-lens-1.png)
+
+![](docs/logit-lens-2.png)
+
+![](docs/logit-lens-3.png)
+
+### Prompt Importance Analysis
+
+![](docs/prompt-importance-analysis.png)
+
+# Self-Attention Analysis
+
+![](docs/multihead-self-attention-1.png)
+![](docs/multihead-self-attention-2.png)
+
 ### Tokenizer Analysis
 
-![](docs/tokenizer-analysis.png)
+GPT-2 maintains a fixed dictionary of around 50k tokens. The model uses the 
+[Byte Pair Encoding](https://en.wikipedia.org/wiki/Byte_pair_encoding) 
+tokenizer algorithm split any given input sentence into a token sequence. This token sequence is mapped to a 
+sequence of integers that is consumed by the model.
+
+![](tokenizer-analysis.png)
 
 ### Embedding Matrix Statistics and Visualization
 
@@ -33,18 +55,6 @@ Feature rundown:
 ### Generation with Top-k Sampling and Temperature
 
 ![](docs/prompt-completition.png)
-
-### Prompt Importance Analysis
-
-![](docs/prompt-importance-analysis.png)
-
-### Logit Lens
-
-![](docs/logit-lens-1.png)
-
-![](docs/logit-lens-2.png)
-
-![](docs/logit-lens-3.png)
 
 ## Automatic Installation
 

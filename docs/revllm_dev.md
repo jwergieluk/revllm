@@ -24,7 +24,24 @@ of transformer decoder-type models. In particular, RevLLM,
 To facilitate the ease of use and provide a hassle-free experimentation experience, we accompany 
 the library with an interactive Streamlit app and provide a web interface to access the library functionality.
 The app automatically downloads and instantiates a chosen model from the GPT-2 family using the _Huggingface_ model 
-repository, and exposes the RevLLM library methods through a convenient interface. 
+repository, and exposes the RevLLM library methods through a convenient interface.
+
+### Logit Lens
+
+![](docs/logit-lens-1.png)
+
+![](docs/logit-lens-2.png)
+
+![](docs/logit-lens-3.png)
+
+### Prompt Importance Analysis
+
+![](docs/prompt-importance-analysis.png)
+
+# Self-Attention Analysis
+
+![](docs/multihead-self-attention-1.png)
+![](docs/multihead-self-attention-2.png)
 
 ### Tokenizer Analysis
 
@@ -37,24 +54,11 @@ sequence of integers that is consumed by the model.
 
 ### Embedding Matrix Statistics and Visualization
 
-![](embedding-matrix-insights.png)
+![](docs/embedding-matrix-insights.png)
 
 ### Generation with Top-k Sampling and Temperature
 
-![](prompt-completition.png)
-
-### Prompt Importance Analysis
-
-![](prompt-importance-analysis.png)
-
-### Logit Lens
-
-![](logit-lens-1.png)
-
-![](logit-lens-2.png)
-
-![](logit-lens-3.png)
-
+![](docs/prompt-completition.png)
 
 ---
 
