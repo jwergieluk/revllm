@@ -28,20 +28,20 @@ repository, and exposes the RevLLM library methods through a convenient interfac
 
 ### Logit Lens
 
-![](docs/logit-lens-1.png)
+![](logit-lens-1.png)
 
-![](docs/logit-lens-2.png)
+![](logit-lens-2.png)
 
-![](docs/logit-lens-3.png)
+![](logit-lens-3.png)
 
 ### Prompt Importance Analysis
 
-![](docs/prompt-importance-analysis.png)
+![](prompt-importance-analysis.png)
 
 # Self-Attention Analysis
 
-![](docs/multihead-self-attention-1.png)
-![](docs/multihead-self-attention-2.png)
+![](multihead-self-attention-1.png)
+![](multihead-self-attention-2.png)
 
 ### Tokenizer Analysis
 
@@ -54,15 +54,22 @@ sequence of integers that is consumed by the model.
 
 ### Embedding Matrix Statistics and Visualization
 
-![](docs/embedding-matrix-insights.png)
+![](embedding-matrix-insights.png)
 
 ### Generation with Top-k Sampling and Temperature
 
-![](docs/prompt-completition.png)
+![](prompt-completition.png)
 
 ---
 
-The development of RevLLM was made possible by the funding of the Prototype Fund. 
+The development of RevLLM was made possible by the funding of the Federal Ministry of Education and Research. 
+
+![](sponsored_by_the_federal_ministry_of_education_and_research.jpg)
+
+(*Förderkennzeichen:* `01IS23S42`)
+
+[The Prototype Fund Project website](https://prototypefund.de/project/reverse-engineering-werkzeuge-fuer-sprachmodelle/)
+
 
 --- 
 
