@@ -453,6 +453,22 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
 def show_page_prompt_importance(wrapper: ModelWrapper):
     st.header("Prompt Importance Analysis")
 
+    st.write(
+        "See the documentation for a description of integrated gradients. We implement "
+        "the standard strategy for LLMs, as well as a variant called sequential "
+        "integrated gradients. For both methods, the baseline token is 0. When analyzing a specific token, the "
+        "baseline prompt differs in the methods:"
+    )
+    st.write(
+        "- For [integrated gradients](https://arxiv.org/pdf/1703.01365.pdf), the baseline prompt is prompt-length repeats of the "
+        "baseline token."
+    )
+    st.write(
+        "- For [sequential integrated gradients](https://arxiv.org/pdf/2305.15853.pdf) , the baseline prompt is the full prompt "
+        "with the baseline token inserted in place of the given token. Computation is "
+        "more complex over the entire prompt."
+    )
+
     selected_importance_method = st.selectbox(
         "Select token importance scoring method",
         ALL_IMPORTANCE_METHODS,
@@ -507,6 +523,14 @@ def show_page_prompt_importance(wrapper: ModelWrapper):
 
 def show_page_all_attentions(wrapper: ModelWrapper):
     st.header(PAGE_ALL_ATTENTIONS)
+
+    st.write(
+        "See the documentation for a discussion of multi-headed self attention.  Here, "
+        "given a prompt, we include heat-mapped matrices of attention scores for each "
+        "layer and head of the chosen model. Hovering the cursor above each entry "
+        "displays the given tokens and attention scores."
+    )
+
     prompt = get_prompt("The capital of Japan is the city of ")
 
     if not prompt:
@@ -534,6 +558,7 @@ def show_page_all_attentions(wrapper: ModelWrapper):
     ]
 
     st.header("All Attentions")
+    st.write(f"Input tokens: {indexed_tokens_list}")
     for layer in list(range(num_layers)):
         st.markdown(
             f"<h3 style='text-align: center; text-decoration: underline;'><b>Layer {layer + 1}</b></h3>",
@@ -586,6 +611,12 @@ def show_page_all_attentions(wrapper: ModelWrapper):
 def show_page_summary_attentions(wrapper: ModelWrapper):
     st.header(PAGE_SUMMARY_ATTENTIONS)
 
+    st.write(
+        "See the documentation for a discussion of multi-headed self attention.  Here, "
+        "given a prompt, we include displays representing the summary statistics across "
+        "all existing attention scores between each pair of tokens."
+    )
+
     prompt = get_prompt("The capital of Japan is the city of ")
 
     if not prompt:
@@ -613,12 +644,17 @@ def show_page_summary_attentions(wrapper: ModelWrapper):
     min_attentions = torch.amin(stacked_tensors, dim=(0, 1))
     attentions_variance = stacked_tensors.var(dim=(0, 1))
     attentions_std = stacked_tensors.std(dim=(0, 1))
+    stacked_tensors_flattened = stacked_tensors.view(-1, context_length, context_length)
+    attentions_median = torch.median(stacked_tensors_flattened, dim=0).values
 
     indexed_tokens_list = [
         "0" + str(index) + "_" + token if len(str(index)) == 1 else str(index) + "_" + token
         for index, token in enumerate(tokens_list)
     ]
     st.write(f"Input tokens: {indexed_tokens_list}")
+    st.write(f"Number of model layers: {num_layers}")
+    st.write(f"Number of heads: {num_heads}")
+    st.write(f"Number of data points for each pair of tokens: {num_layers * num_heads}")
 
     # fig1, axs1 = plt.subplots(context_length, context_length, figsize=(35, 6 * context_length), squeeze=False,sharey=True, sharex=True)
     fig, axs = plt.subplots(
@@ -650,6 +686,12 @@ def show_page_summary_attentions(wrapper: ModelWrapper):
         average_attentions, columns=indexed_tokens_list, index=indexed_tokens_list
     )
     st.dataframe(average_attention_df.style.background_gradient(cmap="Blues", axis=None))
+
+    st.write("Attentions Median")
+    attentions_median_df = pd.DataFrame(
+        attentions_median, columns=indexed_tokens_list, index=indexed_tokens_list
+    )
+    st.dataframe(attentions_median_df.style.background_gradient(cmap="Blues", axis=None))
 
     st.write("Attentions Variance")
     attentions_variance_df = pd.DataFrame(

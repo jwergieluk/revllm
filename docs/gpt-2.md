@@ -24,13 +24,15 @@ We construct a model nanoGPT, following the example given by Andrej Karpathy [(G
 - nanoGPT has the same architecture and weights as [gpt2](https://cdn.openai.com/better-language-models/language_models_are_unsupervised_multitask_learners.pdf), which is trained on a dataset of 8 million web pages. 
   The out-of-the-box model can be imported from [Hugging Face](https://huggingface.co/docs/transformers/model_doc/gpt2).
 
+We focus on nanoGPT for its simplicity and ease of use, as the smaller versions can be run locally on a cpu. The goal of this project is to produce an easily accessable version of analysis with low barriers to entry. Current tools can be later adapted to larger models.
+
 ### Architecture 
 
 Differences between nanoGPT versions lie in the numbers of layers, embedding dimensions, and weights of individual components (see the "architecture" tab under the individual models).  However, their architectures are identical. This section describes the models with dimensions excluded. We assume the reader is familiar with basics of a neural network such as linear, activation, and dropout layers, hence they are listed without comment.  
 
 For what follows:
 
-- Let context be a string with length $c$.
+- Let context be a string with length $c$ - also referred to as "prompt" in the app's pages.
 - Let $n$ be the embedding dimension for choice of model size.
 - A tensor is a generalization of a vector.  Our model employs pytorch tensors.
 - Any discussion of batching or batching dimension is excluded.
@@ -223,6 +225,17 @@ $$
 
 Where the number of steps by default is $m=50$.
 
+#### Our Implementations
+
+For text data embedded in $\mathbb{R}^n$, the features $i$ are the dimensions. For each token, we therefore have $n$-many scores. Our final integrated gradient score for that token is the average of these values.
+
+Sequential data, however, add a further complication. In the above description of IG, the computation is performed for a $1 \times n$ input and baseline. We have a $c \times n$ context (prompt) input, and a $1 \times n$ token baseline (the embedding for the token $0$). If we are analyzing a token indexed by $t$, the question arises about how to set our context baseline.  We implement two strategies:
+
+- Integrated Gradients (IG) typically sets the context baseline as $c$-copies of the baseline token.
+
+- [Sequential Integrated Gradients](https://arxiv.org/pdf/2305.15853.pdf) (SIG) is an alternate approach which sets the context baseline as the full context with the baseline token inserted only at index $t$. 
+
+In both cases, the integral is computed only at token $t$. SIG has the disadvantage of significantly increased computational cost. However, both approaches are in use and highlight different aspects of how an isolated token influences the model's prediction. We therefore include both methods in our implementation.
 
 ## Logit Lens
 
@@ -241,6 +254,8 @@ Recall from above that the term "logits" is commonly used to describe the final 
 The visual display of logit lens contains a prediction along with every word of the context.  Due to the sequential nature of how models like nanoGPT work, predictions are generated for every sub-context which starts from the first word.  The final model prediction is the last of all such predictions.  As the logit lens display shows its evolution, it does so for each of these sub-token predictions as well.
 
 # References
+
+- Enguehard, Joseph. “Sequential Integrated Gradients: a simple but effective method for explaining language models.” ArXiv abs/2305.15853 (2023)
 
 - Garbin, C. (n.d.). A gentle introduction to the concepts of machine learning interpretability, feature attribution, and SHAP. Retrieved from (https://cgarbin.github.io/machine-learning-interpretability-feature-attribution)
 
