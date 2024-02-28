@@ -4,14 +4,17 @@ subtitle: "Reverse Engineering Tools for Large Language Models"
 lang: 'en-US'
 keywords: ['machine learning', 'transformer models', 'GPT-2', 'interpretability', 'reverse engineering']
 author: "Julian Wergieluk"
-date: "2024-02-14"
 ---
 
 RevLLM is a Python library and a Streamlit webapp for exploring internal workings of Large Language Models (LLMs).
 
+<img src="sponsored_by_the_federal_ministry_of_education_and_research.jpg" width="250" alt="Sponsored by the Federal Ministry of Education and Research"/>
+
+(*Förderkennzeichen:* `01IS23S42`)
+
 RevLLM builds on top the _nanoGPT_ implementation of the GPT-2 model family developed by Andrej Karpathy
 and adheres to its spirit of simplicity and transparency. We restrict the dependencies to a 
-bare minimum and strive for clean and simple code that can be easily understood and reused.  
+bare minimum and strive for clean and simple code that can be easily understood and reused. 
 
 The RevLLM library implements various methods for analyzing the internal data-flow
 of transformer decoder-type models. In particular, RevLLM,
@@ -60,18 +63,8 @@ sequence of integers that is consumed by the model.
 
 ![](prompt-completition.png)
 
----
-
-The development of RevLLM was made possible by the funding of the Federal Ministry of Education and Research. 
-
-![](sponsored_by_the_federal_ministry_of_education_and_research.jpg)
-
-(*Förderkennzeichen:* `01IS23S42`)
-
-[The Prototype Fund Project website](https://prototypefund.de/project/reverse-engineering-werkzeuge-fuer-sprachmodelle/)
-
-
---- 
-
+* [The Prototype Fund Project website](https://prototypefund.de/project/reverse-engineering-werkzeuge-fuer-sprachmodelle/)
 * [Impressum / Imprint](imprint.html)
 * [Datenschutzerklärung / Privacy Policy](privacy.html)
+
+Copyright © 2024 Julian Wergieluk
