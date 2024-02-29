@@ -1,6 +1,6 @@
 import os
 from operator import itemgetter
-
+import itertools
 import altair as alt
 import matplotlib.pyplot as plt
 import numpy as np
@@ -338,116 +338,237 @@ def show_page_logit_lens(wrapper: ModelWrapper, k: int = 50):
     )
     st.header("Choose a prompt")
     prompt = get_prompt("The capital of Japan is the city of ")
-
+    
     if not prompt:
         return
 
-    button_run = st.button("Run Logit Lens")
-    if not button_run:
-        return
+    st.write("Middle logits are between self-attention and the feed-forward layer.")
+    middle_logits_checkbox = st.checkbox("Include middle logits", value=False)
 
-    logit_lens_data = wrapper.run_logit_lens(prompt)
+    if middle_logits_checkbox:
+        logit_lens_data = wrapper.run_logit_lens(prompt)
 
-    st.write(
-        f'Output token: _"{logit_lens_data.output_token}"_ ({logit_lens_data.output_token_ids})'
-    )
-    df = logit_lens_data.hidden_state_most_likely_token_df
-    max_logits_df = pd.DataFrame(logit_lens_data.hidden_state_max_logits, columns=df.columns)
-    descriptive_index = [f"h_{i}_out" if len(str(i)) > 1 else f"h_0{i}_out" for i in df.index]
-    df.index = descriptive_index
-    max_logits_df.index = descriptive_index
-    st.caption("Tokens")
-
-    st.dataframe(df.style.background_gradient(cmap="Blues", axis=None, gmap=max_logits_df))
-
-    if len(df.columns) > 1:
-        random_token = np.random.choice(df.columns[1:])
-    else:
-        random_token = df.columns[0]
-    random_token_index = list(df.columns).index(random_token)
-    random_sub_prompt = df.columns[: random_token_index + 1].tolist()
-    random_sub_prompt = [token[token.index("_") + 1 :] for token in random_sub_prompt]
-    random_sub_prompt = "".join(random_sub_prompt)
-    random_df_index = np.random.choice(df.index)
-    st.write(
-        "At each token, the model considers the sub-prompt up to it. "
-        "It generates next-token prediction for this sub-prompt. The final output token is "
-        "simply the last of these predictions. All dataframes on this page are populated "
-        "according to this fact.  \n\nFor example:"
-    )
-    st.write(f"Random token: {random_token}")
-    st.write(f"Sub-prompt: {random_sub_prompt}")
-    st.write(f"Predicted token at layer {random_df_index}: {df.loc[random_df_index, random_token]}")
-
-    st.caption("Logits")
-    st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
-    st.write(
-        "Logits at each layer refer to the raw output of the model before conversion to probability "
-        "scores. Here we include the maximum logit value at each layer."
-    )
-    st.caption(f"Top {k} intersection scores")
-    top_k_intersection_scores = get_top_k_intersection_scores(
-        probabilities_tensor=logit_lens_data.hidden_state_probabilities, k=k
-    )
-    top_k_intersection_scores_df = pd.DataFrame(
-        data=top_k_intersection_scores.squeeze(-1), columns=df.columns, index=df.index
-    )
-    st.dataframe(top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None))
-
-    st.write(
-        "The [top k intersection score](https://arxiv.org/pdf/2305.13417.pdf) of two probability "
-        "tensors measures the degree to which their top k predicted indices overlap (0 = no overlap, "
-        "1 = full overlap). Here, at every layer we compare its ouptut probability tensor with "
-        "the final layer's output probability tensor."
-        ""
-    )
-
-    st.caption(f"Top {k} intersection scores as a line chart")
-    st.line_chart(top_k_intersection_scores_df)
-
-    st.caption("Final prediction ranks")
-    final_prediction_ranks = get_final_predictions_ranks(
-        probabilities_tensor=logit_lens_data.hidden_state_probabilities
-    )
-    final_prediction_ranks_df = pd.DataFrame(
-        data=final_prediction_ranks.squeeze(-1), columns=df.columns, index=df.index
-    )
-    st.dataframe(final_prediction_ranks_df.style.background_gradient(cmap="Blues", axis=None))
-
-    st.write(
-        "The final prediction for each sub-prompt refers to the predicted (top ranked) token at the "
-        "final layer (the bottom row of the first dataframe above). Here, at each layer, we view the "
-        "final prediction's rank among all tokens."
-    )
-
-    st.caption("Final prediction ranks as a line chart")
-    st.line_chart(final_prediction_ranks_df)
-
-    st.subheader("Word clouds from token logits")
-    st.write(
-        "At each layer, we include a word cloud for the full prompt's top 20 predicted "
-        "tokens, with a probabilities histogram included."
-    )
-
-    all_tokens = wrapper.tokenizer.get_all_tokens()
-    for i, layer in enumerate(descriptive_index):
-        st.write(f"Layer **{layer}**")
-
-        layer_probabilities: np.ndarray = (
-            logit_lens_data.hidden_state_probabilities[i, -1].squeeze().numpy()
+        st.write(
+            f'Output token: _"{logit_lens_data.output_token}"_ ({logit_lens_data.output_token_ids})'
         )
-        p_cutoff = np.sort(layer_probabilities)[-20]
+        df = logit_lens_data.hidden_state_most_likely_token_df
+        max_logits_df = pd.DataFrame(logit_lens_data.hidden_state_max_logits, columns=df.columns)
+        descriptive_index = ['h_00', ]
+        descriptive_index.extend(
+            itertools.chain.from_iterable((f'h_{i:02d}_middle', f'h_{i:02d}_out') for i in range(1, wrapper.model.config.n_layer+1))
+        )
+        df.index = descriptive_index
+        max_logits_df.index = descriptive_index
+        st.caption("Tokens")
 
-        top_tokens = [
-            (all_tokens[i], p) for i, p in enumerate(layer_probabilities) if p >= p_cutoff
+        st.dataframe(df.style.background_gradient(cmap="Blues", axis=None, gmap=max_logits_df))
+
+        if len(df.columns) > 1:
+            random_token = np.random.choice(df.columns[1:])
+        else:
+            random_token = df.columns[0]
+        random_token_index = list(df.columns).index(random_token)
+        random_sub_prompt = df.columns[: random_token_index + 1].tolist()
+        random_sub_prompt = [token[token.index("_") + 1 :] for token in random_sub_prompt]
+        random_sub_prompt = "".join(random_sub_prompt)
+        random_df_index = np.random.choice(df.index)
+        st.write(
+            "At each token, the model considers the sub-prompt up to it. "
+            "It generates next-token prediction for this sub-prompt. The final output token is "
+            "simply the last of these predictions. All dataframes on this page are populated "
+            "according to this fact.  \n\nFor example:"
+        )
+        st.write(f"Random token: {random_token}")
+        st.write(f"Sub-prompt: {random_sub_prompt}")
+        st.write(
+            f"Predicted token at layer {random_df_index}: {df.loc[random_df_index, random_token]}"
+        )
+
+        st.caption("Logits")
+        st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
+        st.write(
+            "Logits at each layer refer to the raw output of the model before conversion to probability "
+            "scores. Here we include the maximum logit value at each layer."
+        )
+        st.caption(f"Top {k} intersection scores")
+        top_k_intersection_scores = get_top_k_intersection_scores(
+            probabilities_tensor=logit_lens_data.hidden_state_probabilities, k=k
+        )
+        top_k_intersection_scores_df = pd.DataFrame(
+            data=top_k_intersection_scores.squeeze(-1), columns=df.columns, index=df.index
+        )
+        st.dataframe(
+            top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None)
+        )
+
+        st.write(
+            "The [top k intersection score](https://arxiv.org/pdf/2305.13417.pdf) of two probability "
+            "tensors measures the degree to which their top k predicted indices overlap (0 = no overlap, "
+            "1 = full overlap). Here, at every layer we compare its ouptut probability tensor with "
+            "the final layer's output probability tensor."
+            ""
+        )
+
+        st.caption(f"Top {k} intersection scores as a line chart")
+        st.line_chart(top_k_intersection_scores_df)
+
+        st.caption("Final prediction ranks")
+        final_prediction_ranks = get_final_predictions_ranks(
+            probabilities_tensor=logit_lens_data.hidden_state_probabilities
+        )
+        final_prediction_ranks_df = pd.DataFrame(
+            data=final_prediction_ranks.squeeze(-1), columns=df.columns, index=df.index
+        )
+        st.dataframe(final_prediction_ranks_df.style.background_gradient(cmap="Blues", axis=None))
+
+        st.write(
+            "The final prediction for each sub-prompt refers to the predicted (top ranked) token at the "
+            "final layer (the bottom row of the first dataframe above). Here, at each layer, we view the "
+            "final prediction's rank among all tokens."
+        )
+
+        st.caption("Final prediction ranks as a line chart")
+        st.line_chart(final_prediction_ranks_df)
+
+        st.subheader("Word clouds from token logits")
+        st.write(
+            "At each layer, we include a word cloud for the full prompt's top 20 predicted "
+            "tokens, with a probabilities histogram included."
+        )
+
+        all_tokens = wrapper.tokenizer.get_all_tokens()
+        for i, layer in enumerate(descriptive_index):
+            st.write(f"Layer **{layer}**")
+
+            layer_probabilities: np.ndarray = (
+                logit_lens_data.hidden_state_probabilities[i, -1].squeeze().numpy()
+            )
+            p_cutoff = np.sort(layer_probabilities)[-20]
+
+            top_tokens = [
+                (all_tokens[i], p) for i, p in enumerate(layer_probabilities) if p >= p_cutoff
+            ]
+            top_tokens = sorted(top_tokens, key=itemgetter(1), reverse=True)
+            top_tokens_df = pd.DataFrame(data=top_tokens, columns=["token", "probability"])
+
+            word_cloud_array = make_word_cloud(all_tokens, layer_probabilities)
+
+            st.image(word_cloud_array)
+            display_vega_bar_chart(top_tokens_df, description=f"Top tokens in layer {layer}")
+    else:
+        logit_lens_data = wrapper.run_logit_lens(prompt)
+
+        st.write(
+            f'Output token: _"{logit_lens_data.output_token}"_ ({logit_lens_data.output_token_ids})'
+        )
+        df = logit_lens_data.hidden_state_most_likely_token_df[::2]
+        max_logits_df = pd.DataFrame(
+            logit_lens_data.hidden_state_max_logits[::2], columns=df.columns
+        )
+        descriptive_index = [
+            "h_00" if i == 0 else f"h_{i}_out" if len(str(i)) > 1 else f"h_0{i}_out"
+            for i in range(len(df.index))
         ]
-        top_tokens = sorted(top_tokens, key=itemgetter(1), reverse=True)
-        top_tokens_df = pd.DataFrame(data=top_tokens, columns=["token", "probability"])
 
-        word_cloud_array = make_word_cloud(all_tokens, layer_probabilities)
+        df.index = descriptive_index
+        max_logits_df.index = descriptive_index
+        st.caption("Tokens")
 
-        st.image(word_cloud_array)
-        display_vega_bar_chart(top_tokens_df, description=f"Top tokens in layer {layer}")
+        st.dataframe(df.style.background_gradient(cmap="Blues", axis=None, gmap=max_logits_df))
+
+        if len(df.columns) > 1:
+            random_token = np.random.choice(df.columns[1:])
+        else:
+            random_token = df.columns[0]
+        random_token_index = list(df.columns).index(random_token)
+        random_sub_prompt = df.columns[: random_token_index + 1].tolist()
+        random_sub_prompt = [token[token.index("_") + 1 :] for token in random_sub_prompt]
+        random_sub_prompt = "".join(random_sub_prompt)
+        random_df_index = np.random.choice(df.index)
+        st.write(
+            "At each token, the model considers the sub-prompt up to it. "
+            "It generates next-token prediction for this sub-prompt. The final output token is "
+            "simply the last of these predictions. All dataframes on this page are populated "
+            "according to this fact.  \n\nFor example:"
+        )
+        st.write(f"Random token: {random_token}")
+        st.write(f"Sub-prompt: {random_sub_prompt}")
+        st.write(
+            f"Predicted token at layer {random_df_index}: {df.loc[random_df_index, random_token]}"
+        )
+
+        st.caption("Logits")
+        st.dataframe(max_logits_df.style.background_gradient(cmap="Blues", axis=None))
+        st.write(
+            "Logits at each layer refer to the raw output of the model before conversion to probability "
+            "scores. Here we include the maximum logit value at each layer."
+        )
+        st.caption(f"Top {k} intersection scores")
+        top_k_intersection_scores = get_top_k_intersection_scores(
+            probabilities_tensor=logit_lens_data.hidden_state_probabilities, k=k
+        )
+        top_k_intersection_scores_df = pd.DataFrame(
+            data=top_k_intersection_scores[::2].squeeze(-1), columns=df.columns, index=df.index
+        )
+        top_k_intersection_scores_df.index = descriptive_index
+        st.dataframe(
+            top_k_intersection_scores_df.style.background_gradient(cmap="Blues", axis=None)
+        )
+
+        st.write(
+            "The [top k intersection score](https://arxiv.org/pdf/2305.13417.pdf) of two probability "
+            "tensors measures the degree to which their top k predicted indices overlap (0 = no overlap, "
+            "1 = full overlap). Here, at every layer we compare its ouptut probability tensor with "
+            "the final layer's output probability tensor."
+            ""
+        )
+
+        st.caption(f"Top {k} intersection scores as a line chart")
+        st.line_chart(top_k_intersection_scores_df)
+
+        st.caption("Final prediction ranks")
+        final_prediction_ranks = get_final_predictions_ranks(
+            probabilities_tensor=logit_lens_data.hidden_state_probabilities
+        )
+        final_prediction_ranks_df = pd.DataFrame(
+            data=final_prediction_ranks[::2].squeeze(-1), columns=df.columns, index=df.index
+        )
+        st.dataframe(final_prediction_ranks_df.style.background_gradient(cmap="Blues", axis=None))
+
+        st.write(
+            "The final prediction for each sub-prompt refers to the predicted (top ranked) token at the "
+            "final layer (the bottom row of the first dataframe above). Here, at each layer, we view the "
+            "final prediction's rank among all tokens."
+        )
+
+        st.caption("Final prediction ranks as a line chart")
+        st.line_chart(final_prediction_ranks_df)
+
+        st.subheader("Word clouds from token logits")
+        st.write(
+            "At each layer, we include a word cloud for the full prompt's top 20 predicted "
+            "tokens, with a probabilities histogram included."
+        )
+
+        all_tokens = wrapper.tokenizer.get_all_tokens()
+        for i, layer in enumerate(descriptive_index):
+            st.write(f"Layer **{layer}**")
+
+            layer_probabilities: np.ndarray = (
+                logit_lens_data.hidden_state_probabilities[i, -1].squeeze().numpy()
+            )
+            p_cutoff = np.sort(layer_probabilities)[-20]
+
+            top_tokens = [
+                (all_tokens[i], p) for i, p in enumerate(layer_probabilities) if p >= p_cutoff
+            ]
+            top_tokens = sorted(top_tokens, key=itemgetter(1), reverse=True)
+            top_tokens_df = pd.DataFrame(data=top_tokens, columns=["token", "probability"])
+
+            word_cloud_array = make_word_cloud(all_tokens, layer_probabilities)
+
+            st.image(word_cloud_array)
+            display_vega_bar_chart(top_tokens_df, description=f"Top tokens in layer {layer}")
 
 
 def show_page_prompt_importance(wrapper: ModelWrapper):
@@ -681,7 +802,7 @@ def show_page_summary_attentions(wrapper: ModelWrapper):
     st.write("Boxplots")
     st.pyplot(fig)
 
-    st.write("Average Attentions")
+    st.write("Attentions Average")
     average_attention_df = pd.DataFrame(
         average_attentions, columns=indexed_tokens_list, index=indexed_tokens_list
     )

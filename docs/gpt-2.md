@@ -32,7 +32,7 @@ Differences between nanoGPT versions lie in the numbers of layers, embedding dim
 
 For what follows:
 
-- Let context be a string with length $c$ - also referred to as "prompt" in the app's pages.
+- Let context be a string with length $c$ (context is also referred to as "prompt" in the app's pages).
 - Let $n$ be the embedding dimension for choice of model size.
 - A tensor is a generalization of a vector.  Our model employs pytorch tensors.
 - Any discussion of batching or batching dimension is excluded.
@@ -119,7 +119,7 @@ The final output of the self attention layer is: x = $(AV)W^O$.
 
 Upon application of softmax:
 
-- <u>$A$ is Lower-Triangular</u>, since arbitrarily large negative values of $S$ are a masking condition, as they map arbitrarily close to $0$.  The entry $a_{i,j}$ numerically represents a relationship or 'attention' the model pays from token $i$ to token $j$.  When predicting a next token, the model can only attend to previously seen elements and not to future ones, hence they are nonzero only when $i \geq j$.
+- <u>$A$ is Lower-Triangular</u>, since arbitrarily large negative values of $S$ are a masking condition, as they map arbitrarily close to $0$ under softmax.  The entry $a_{i,j}$ numerically represents a relationship or 'attention' the model pays from token $i$ to token $j$.  When predicting a next token, the model can only attend to previously seen elements and not to future ones, hence they are nonzero only when $i \geq j$.
 - <u>The rows of $A$ are probability vectors</u>: The multiplication $AV$ therefore yields a weighted sum of the values in $V$ for each token. The current attention focus can be thought of as being distributed across the input context.
 
 Additional notes (for further explanation, see the 2017 paper linked above):
@@ -239,15 +239,15 @@ In both cases, the integral is computed only at token $t$. SIG has the disadvant
 
 ## Logit Lens
 
-Recall from above that the term "logits" is commonly used to describe the final raw output of the model, before any softmax transformation and subsequent translation to natural language. 
+Recall that the term "logits" is commonly used to describe the final raw output (here, the final transformed embeddings) of a model, before any softmax transformation and subsequent translation to a prediction (here, natural language). We would also like to extract the middle embeddings in order to view the progression of what the model believes. With this motivation, we implement a modified version of [logit lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), which performs this extraction and processes it for next token generation.
+ 
+After each additive step in the architecture described above, we extract the $c \times n$ embedding tensor at that point. We then pass them throught the final interpretation layers (layer norm, `lm_head`) to view the local next token generation:
 
- Internal to the model, each pass through nanoGPT's transformer block maps a $c \times n$ embedding tensor to another $c \times n$ tensor.  We include an implementation of [logit lens](https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens), a tool which transforms these embeddings into logits:
-
-
-- After each block, we extract the embeddings and run them through the final layers of the model (ln_f, lm_head), giving us logits at each layer. 
-- We can then complete the final post-processing steps and view next token generation up to that point.  These steps display how the model gradually converges to a final prediction.
-- This window gives an insight as to what the model believes after each block, and how it evolves.
-- In contrast to other model internals such as the attention mechanism, this window indicates what the model believes at a step, not how.  However, viewing how the model updates its understanding over time can give a good insight to its functionality.
+- `h_00` applies `ln_f`, then `lm_head` to x = token_embedding + position_embedding
+- Within each block:
+  - `h_block_middle` applies `ln_2`, then `lm_head` to x = x + attn(x)
+    - This display is optional and can be toggled on or off. It was inspired by a step of [lm_debugger](https://arxiv.org/pdf/2204.12130v2.pdf).
+  - `h_block_out` applies `ln_f`, then `lm_head` to x = x + MLP(x)
 
 ### Sub-Token Predictiton
 
@@ -259,16 +259,18 @@ The visual display of logit lens contains a prediction along with every word of 
 
 - Garbin, C. (n.d.). A gentle introduction to the concepts of machine learning interpretability, feature attribution, and SHAP. Retrieved from (https://cgarbin.github.io/machine-learning-interpretability-feature-attribution)
 
+- Geva, Mor, Avi Caciularu, Guy Dar, Paul Roit, Shoval Sadde, Micah Shlain, Bar Tamir and Yoav Goldberg. “LM-Debugger: An Interactive Tool for Inspection and Intervention in Transformer-Based Language Models.” ArXiv abs/2204.12130 (2022)
+
 - Karpathy, A. nanoGPT [Software]. GitHub. (https://github.com/karpathy/nanoGPT)
 
 - Krishna, Satyapriya, Tessa Han, Alex Gu, Javin Pombra, Shahin Jabbari, Steven Wu and Himabindu Lakkaraju. “The Disagreement Problem in Explainable Machine Learning: A Practitioner's Perspective.” ArXiv abs/2202.01602 (2022)
 
-- Press, Ofir and Lior Wolf. “Using the Output Embedding to Improve Language Models.” Conference of the European Chapter of the Association for Computational Linguistics (2016).
+- Press, Ofir and Lior Wolf. “Using the Output Embedding to Improve Language Models.” Conference of the European Chapter of the Association for Computational Linguistics (2016)
 
 - Radford, Alec, Jeff Wu, Rewon Child, David Luan, Dario Amodei and Ilya Sutskever. “Language Models are Unsupervised Multitask Learners.” (2019). OpenAI Blog.
 
-- Sundararajan, Mukund, Ankur Taly and Qiqi Yan. “Axiomatic Attribution for Deep Networks.” International Conference on Machine Learning (2017).
+- Sundararajan, Mukund, Ankur Taly and Qiqi Yan. “Axiomatic Attribution for Deep Networks.” International Conference on Machine Learning (2017)
 
-- Vaswani, Ashish, Noam M. Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin. “Attention is All you Need.” Neural Information Processing Systems (2017).
+- Vaswani, Ashish, Noam M. Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser and Illia Polosukhin. “Attention is All you Need.” Neural Information Processing Systems (2017)
 
 - nostalgebraist. 2020. interpreting gpt: the logit lens. (https://www.lesswrong.com/posts/AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens)

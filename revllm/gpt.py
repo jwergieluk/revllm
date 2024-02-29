@@ -158,12 +158,10 @@ class Block(nn.Module):
     def forward(self, x: torch.Tensor, output_attentions=False):
         attn_output, attention_matrix = self.attn(self.ln_1(x), output_attentions=output_attentions)
         x = x + attn_output
-        x = x + self.mlp(self.ln_2(x))
+        middle_state = self.ln_2(x)
+        x = x + self.mlp(middle_state)
 
-        # if self.output_attentions:
-        return x, attention_matrix
-        # else:
-        #     return x
+        return x, middle_state, attention_matrix
 
 
 class GPT(nn.Module):
@@ -270,12 +268,15 @@ class GPT(nn.Module):
         with torch.no_grad():
             logits = self.lm_head(self.transformer.ln_f(x))
             hidden_state_logits.append(logits)
-        for block in self.transformer.h:
-            x, attention_matrices = block(x, output_attentions=True)
+        for block_index, block in enumerate(self.transformer.h):
+            x, middle_state, attention_matrices = block(x, output_attentions=True)
             with torch.no_grad():
                 attentions.append(attention_matrices)
-                logits = self.lm_head(self.transformer.ln_f(x))
-                hidden_state_logits.append(logits)
+                # middle_logits = self.lm_head(self.transformer.h[block_index].ln_2(middle_state))
+                middle_logits = self.lm_head(middle_state)
+                hidden_state_logits.append(middle_logits)
+                out_logits = self.lm_head(self.transformer.ln_f(x))
+                hidden_state_logits.append(out_logits)
         x = self.transformer.ln_f(x)
 
         logits = self.lm_head(x[:, [-1], :])  # note: using list [-1] to preserve the time dim
